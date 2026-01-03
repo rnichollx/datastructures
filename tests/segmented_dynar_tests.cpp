@@ -16,6 +16,7 @@
 
 #include "rpnx/segmented_dynar.hpp"
 #include "failing_allocator.hpp"
+#include "tracking_allocator.hpp"
 
 TEST(segmented_dynar, construct_empty)
 {
@@ -191,4 +192,33 @@ TEST(segmented_dynar, reserve_leak_on_exception)
     EXPECT_THROW(arr.reserve(100), std::bad_alloc);
 
     EXPECT_EQ(testutils::failing_allocator<int>::total_allocations, initial_allocations);
+}
+
+TEST(segmented_dynar, allocator_propagation_copy_assignment)
+{
+    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c1(testutils::tracking_allocator<int>(1));
+    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c2(testutils::tracking_allocator<int>(2));
+
+    c2 = c1;
+    // Should propagate
+    EXPECT_EQ(c2.get_allocator().id, 1);
+}
+
+TEST(segmented_dynar, allocator_non_propagation_copy_assignment)
+{
+    rpnx::segmented_dynar<int, testutils::non_propagate_allocator<int>> c1(testutils::non_propagate_allocator<int>(1));
+    rpnx::segmented_dynar<int, testutils::non_propagate_allocator<int>> c2(testutils::non_propagate_allocator<int>(2));
+
+    c2 = c1;
+    // Should NOT propagate
+    EXPECT_EQ(c2.get_allocator().id, 2);
+}
+
+TEST(segmented_dynar, allocator_copy_construction)
+{
+    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c1(testutils::tracking_allocator<int>(1));
+    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c2 = c1;
+
+    // Should use select_on_container_copy_construction
+    EXPECT_EQ(c2.get_allocator().id, 101);
 }

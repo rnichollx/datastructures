@@ -17,6 +17,7 @@
 #include <memory>
 #include <bit>
 #include <cassert>
+#include <stdexcept>
 
 namespace rpnx
 {
@@ -138,6 +139,13 @@ namespace rpnx
 
     public:
         segmented_dynar() = default;
+
+        explicit segmented_dynar(const Alloc& a) noexcept : alloc(a) {}
+
+        Alloc get_allocator() const noexcept
+        {
+            return alloc;
+        }
 
         std::size_t capacity() const
         {
@@ -370,7 +378,8 @@ namespace rpnx
             return *this;
         }
 
-        segmented_dynar(const segmented_dynar& other)
+        segmented_dynar(const segmented_dynar& other) : 
+            alloc(std::allocator_traits<Alloc>::select_on_container_copy_construction(other.alloc))
         {
             reserve(other.m_size);
             for (std::size_t i = 0; i < other.m_size; ++i)
@@ -383,6 +392,14 @@ namespace rpnx
         {
             if (this != &other)
             {
+                if constexpr (std::allocator_traits<Alloc>::propagate_on_container_copy_assignment::value)
+                {
+                    if (alloc != other.alloc)
+                    {
+                        reset();
+                    }
+                    alloc = other.alloc;
+                }
                 clear();
                 reserve(other.m_size);
                 for (std::size_t i = 0; i < other.m_size; ++i)
