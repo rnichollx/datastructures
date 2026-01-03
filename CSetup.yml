@@ -1,0 +1,8 @@
+default_configuration:
+    depends: [ googletest ]
+    project_type: CMake
+    cmake_package_name: RPNXDataStructures
+suggested_dep_sources:
+    googletest:
+        git:
+            repository: "https://github.com/rnichollx/googletest.git"
