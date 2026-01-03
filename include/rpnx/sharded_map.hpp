@@ -1,0 +1,8 @@
+// Copyright (c) 2026 Ryan P. Nicholl $USER_EMAIL
+
+#ifndef RPNXDATASTRUCTURES_SHARDED_MAP_HPP
+#define RPNXDATASTRUCTURES_SHARDED_MAP_HPP
+
+#error "not implemented"
+
+#endif //RPNXDATASTRUCTURES_SHARDED_MAP_HPP
