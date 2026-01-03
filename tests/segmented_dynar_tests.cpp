@@ -17,6 +17,8 @@
 #include "rpnx/segmented_dynar.hpp"
 #include "failing_allocator.hpp"
 #include "tracking_allocator.hpp"
+#include <algorithm>
+#include <numeric>
 
 TEST(segmented_dynar, construct_empty)
 {
@@ -221,4 +223,180 @@ TEST(segmented_dynar, allocator_copy_construction)
 
     // Should use select_on_container_copy_construction
     EXPECT_EQ(c2.get_allocator().id, 101);
+}
+
+TEST(segmented_dynar, iterator_begin_end_empty)
+{
+    rpnx::segmented_dynar<int> arr;
+    EXPECT_EQ(arr.begin(), arr.end());
+    EXPECT_EQ(arr.cbegin(), arr.cend());
+}
+
+TEST(segmented_dynar, iterator_forward_iteration)
+{
+    rpnx::segmented_dynar<int> arr;
+    for (int i = 0; i < 100; ++i)
+    {
+        arr.push_back(i);
+    }
+
+    int expected = 0;
+    for (auto it = arr.begin(); it != arr.end(); ++it)
+    {
+        EXPECT_EQ(*it, expected++);
+    }
+    EXPECT_EQ(expected, 100);
+}
+
+TEST(segmented_dynar, iterator_backward_iteration)
+{
+    rpnx::segmented_dynar<int> arr;
+    for (int i = 0; i < 100; ++i)
+    {
+        arr.push_back(i);
+    }
+
+    int expected = 99;
+    auto it = arr.end();
+    while (it != arr.begin())
+    {
+        --it;
+        EXPECT_EQ(*it, expected--);
+    }
+    EXPECT_EQ(expected, -1);
+}
+
+TEST(segmented_dynar, iterator_post_increment_decrement)
+{
+    rpnx::segmented_dynar<int> arr;
+    arr.push_back(1);
+    arr.push_back(2);
+
+    auto it = arr.begin();
+    EXPECT_EQ(*(it++), 1);
+    EXPECT_EQ(*it, 2);
+    EXPECT_EQ(*(it--), 2);
+    EXPECT_EQ(*it, 1);
+}
+
+TEST(segmented_dynar, iterator_random_access_arithmetic)
+{
+    rpnx::segmented_dynar<int> arr;
+    for (int i = 0; i < 1000; ++i)
+    {
+        arr.push_back(i);
+    }
+
+    auto it = arr.begin();
+    EXPECT_EQ(*(it + 50), 50);
+    EXPECT_EQ(*(it + 500), 500);
+
+    it += 100;
+    EXPECT_EQ(*it, 100);
+
+    it -= 50;
+    EXPECT_EQ(*it, 50);
+
+    auto it2 = it + 400;
+    EXPECT_EQ(it2 - it, 400);
+    EXPECT_EQ(it - it2, -400);
+}
+
+TEST(segmented_dynar, iterator_subscript_operator)
+{
+    rpnx::segmented_dynar<int> arr;
+    for (int i = 0; i < 100; ++i)
+    {
+        arr.push_back(i);
+    }
+
+    auto it = arr.begin();
+    for (int i = 0; i < 100; ++i)
+    {
+        EXPECT_EQ(it[i], i);
+    }
+}
+
+TEST(segmented_dynar, iterator_comparison_operators)
+{
+    rpnx::segmented_dynar<int> arr;
+    for (int i = 0; i < 10; ++i) arr.push_back(i);
+
+    auto it1 = arr.begin() + 2;
+    auto it2 = arr.begin() + 5;
+
+    EXPECT_TRUE(it1 < it2);
+    EXPECT_TRUE(it1 <= it2);
+    EXPECT_TRUE(it2 > it1);
+    EXPECT_TRUE(it2 >= it1);
+    EXPECT_FALSE(it1 == it2);
+    EXPECT_TRUE(it1 != it2);
+
+    auto it3 = it1;
+    EXPECT_TRUE(it1 == it3);
+    EXPECT_FALSE(it1 != it3);
+    EXPECT_TRUE(it1 <= it3);
+    EXPECT_TRUE(it1 >= it3);
+}
+
+TEST(segmented_dynar, iterator_const_iterator_interop)
+{
+    rpnx::segmented_dynar<int> arr;
+    arr.push_back(10);
+
+    rpnx::segmented_dynar<int>::iterator it = arr.begin();
+    rpnx::segmented_dynar<int>::const_iterator cit = it; // Conversion
+
+    EXPECT_EQ(*it, *cit);
+    EXPECT_TRUE(it == cit);
+    EXPECT_FALSE(it != cit);
+    EXPECT_TRUE(it <= cit);
+    EXPECT_TRUE(it >= cit);
+}
+
+TEST(segmented_dynar, iterator_stl_algorithms)
+{
+    rpnx::segmented_dynar<int> arr;
+    for (int i = 0; i < 100; ++i) arr.push_back(100 - i);
+
+    std::sort(arr.begin(), arr.end());
+
+    for (int i = 0; i < 100; ++i)
+    {
+        EXPECT_EQ(arr[i], i + 1);
+    }
+
+    auto it = std::find(arr.begin(), arr.end(), 50);
+    EXPECT_NE(it, arr.end());
+    EXPECT_EQ(*it, 50);
+
+    int sum = std::accumulate(arr.begin(), arr.end(), 0);
+    EXPECT_EQ(sum, 100 * 101 / 2);
+}
+
+TEST(segmented_dynar, iterator_large_scale_iteration)
+{
+    rpnx::segmented_dynar<int> arr;
+    const int count = 10000;
+    for (int i = 0; i < count; ++i) arr.push_back(i);
+
+    int i = 0;
+    for (int val : arr)
+    {
+        EXPECT_EQ(val, i++);
+    }
+    EXPECT_EQ(i, count);
+}
+
+TEST(segmented_dynar, iterator_arrow_operator)
+{
+    struct S
+    {
+        int x;
+    };
+    rpnx::segmented_dynar<S> arr;
+    arr.push_back({42});
+
+    auto it = arr.begin();
+    EXPECT_EQ(it->x, 42);
 }

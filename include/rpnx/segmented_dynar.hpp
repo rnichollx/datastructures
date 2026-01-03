@@ -33,7 +33,7 @@ namespace rpnx
         std::size_t m_size = 0;
         std::size_t m_capacity = 0;
         T** m_segments = nullptr;
-        [[no_unique_address]] Alloc alloc;
+        [[no_unique_address]] Alloc m_alloc;
 
 
         static constexpr std::size_t index_segment(std::size_t index) noexcept
@@ -140,11 +140,13 @@ namespace rpnx
     public:
         segmented_dynar() = default;
 
-        explicit segmented_dynar(const Alloc& a) noexcept : alloc(a) {}
+        explicit segmented_dynar(const Alloc& a) noexcept : m_alloc(a)
+        {
+        }
 
         Alloc get_allocator() const noexcept
         {
-            return alloc;
+            return m_alloc;
         }
 
         std::size_t capacity() const
@@ -167,12 +169,12 @@ namespace rpnx
             }
             std::size_t old_segment_count = capacity_segment_count(m_capacity);
             std::size_t new_segment_count = capacity_segment_count(new_capacity);
-            segment_allocator_type typed_allocator(alloc);
+            segment_allocator_type typed_allocator(m_alloc);
             T** new_segments = segment_alloc_traits::allocate(typed_allocator, new_segment_count);
 
             using element_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
             using element_alloc_traits = std::allocator_traits<element_allocator_type>;
-            element_allocator_type elem_alloc(alloc);
+            element_allocator_type elem_alloc(m_alloc);
             try
             {
                 for (std::size_t i = 0; i < old_segment_count; ++i)
@@ -221,7 +223,7 @@ namespace rpnx
 
             using element_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
             using element_alloc_traits = std::allocator_traits<element_allocator_type>;
-            element_allocator_type elem_alloc(alloc);
+            element_allocator_type elem_alloc(m_alloc);
             T*& segment = m_segments[segment_index];
             assert(sub_index < segment_size(segment_index));
             assert(segment != nullptr);
@@ -268,7 +270,7 @@ namespace rpnx
             std::size_t sub_index = index_subindex(m_size);
             using element_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
             using element_alloc_traits = std::allocator_traits<element_allocator_type>;
-            element_allocator_type elem_alloc(alloc);
+            element_allocator_type elem_alloc(m_alloc);
             T*& segment = m_segments[segment_index];
             element_alloc_traits::destroy(elem_alloc, &segment[sub_index]);
         }
@@ -280,11 +282,11 @@ namespace rpnx
             {
                 using segment_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T*>;
                 using segment_alloc_traits = std::allocator_traits<segment_allocator_type>;
-                segment_allocator_type segment_allocator(alloc);
+                segment_allocator_type segment_allocator(m_alloc);
 
                 using element_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
                 using element_alloc_traits = std::allocator_traits<element_allocator_type>;
-                element_allocator_type elem_alloc(alloc);
+                element_allocator_type elem_alloc(m_alloc);
 
                 if (required_segment_count == 0)
                 {
@@ -344,7 +346,7 @@ namespace rpnx
             std::size_t sub_index = index_subindex(insertion_index);
             using element_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
             using element_alloc_traits = std::allocator_traits<element_allocator_type>;
-            element_allocator_type elem_alloc(alloc);
+            element_allocator_type elem_alloc(m_alloc);
             T*& segment = m_segments[segment_index];
             assert(sub_index < segment_size(segment_index));
             assert(segment != nullptr);
@@ -354,7 +356,8 @@ namespace rpnx
         }
 
         segmented_dynar(segmented_dynar&& other) noexcept : m_size(other.m_size), m_capacity(other.m_capacity),
-                                                            m_segments(other.m_segments), alloc(std::move(other.alloc))
+                                                            m_segments(other.m_segments),
+                                                            m_alloc(std::move(other.m_alloc))
         {
             other.m_size = 0;
             other.m_capacity = 0;
@@ -369,7 +372,7 @@ namespace rpnx
                 m_size = other.m_size;
                 m_capacity = other.m_capacity;
                 m_segments = other.m_segments;
-                alloc = std::move(other.alloc);
+                m_alloc = std::move(other.m_alloc);
 
                 other.m_size = 0;
                 other.m_capacity = 0;
@@ -378,8 +381,8 @@ namespace rpnx
             return *this;
         }
 
-        segmented_dynar(const segmented_dynar& other) : 
-            alloc(std::allocator_traits<Alloc>::select_on_container_copy_construction(other.alloc))
+        segmented_dynar(const segmented_dynar& other) :
+            m_alloc(std::allocator_traits<Alloc>::select_on_container_copy_construction(other.m_alloc))
         {
             reserve(other.m_size);
             for (std::size_t i = 0; i < other.m_size; ++i)
@@ -394,11 +397,11 @@ namespace rpnx
             {
                 if constexpr (std::allocator_traits<Alloc>::propagate_on_container_copy_assignment::value)
                 {
-                    if (alloc != other.alloc)
+                    if (m_alloc != other.m_alloc)
                     {
                         reset();
                     }
-                    alloc = other.alloc;
+                    m_alloc = other.m_alloc;
                 }
                 clear();
                 reserve(other.m_size);
@@ -409,6 +412,203 @@ namespace rpnx
             }
             return *this;
         }
+
+        template <bool Const>
+        class iterator_impl
+        {
+        public:
+            using iterator_category = std::random_access_iterator_tag;
+            using difference_type = std::ptrdiff_t;
+            using value_type = T;
+            using pointer = std::conditional_t<Const, T const*, T*>;
+            using reference = std::conditional_t<Const, T const&, T&>;
+            using container_ptr = std::conditional_t<Const, const segmented_dynar*, segmented_dynar*>;
+
+        private:
+            container_ptr m_container = nullptr;
+            std::size_t m_global_index = 0;
+            pointer m_ptr = nullptr;
+            pointer m_seg_begin = nullptr;
+            pointer m_seg_end = nullptr;
+
+            void load_segment_cache()
+            {
+                if (m_global_index == m_container->size())
+                {
+                    m_ptr = nullptr;
+                    return;
+                }
+
+                std::size_t seg_idx = index_segment(m_global_index);
+                std::size_t sub_idx = index_subindex(m_global_index);
+
+                pointer segment_base = m_container->m_segments[seg_idx];
+                std::size_t seg_sz = segment_size(seg_idx);
+
+                m_ptr = segment_base + sub_idx;
+                m_seg_begin = segment_base;
+                m_seg_end = segment_base + seg_sz;
+            }
+
+        public:
+            iterator_impl() = default;
+
+            iterator_impl(container_ptr container, std::size_t index)
+                : m_container(container), m_global_index(index)
+            {
+                if (container && index < container->size())
+                {
+                    load_segment_cache();
+                }
+            }
+
+            template <bool Const2, typename = std::enable_if_t<Const && !Const2>>
+            iterator_impl(const iterator_impl<Const2>& other)
+                : m_container(other.m_container), m_global_index(other.m_global_index),
+                  m_ptr(other.m_ptr), m_seg_begin(other.m_seg_begin), m_seg_end(other.m_seg_end)
+            {
+            }
+
+            reference operator*() const { return *m_ptr; }
+            pointer operator->() const { return m_ptr; }
+
+
+            iterator_impl& operator++()
+            {
+                ++m_ptr;
+                ++m_global_index;
+                if (m_ptr == m_seg_end)
+                {
+                    load_segment_cache();
+                }
+                return *this;
+            }
+
+            iterator_impl operator++(int)
+            {
+                iterator_impl temp = *this;
+                ++(*this);
+                return temp;
+            }
+
+
+            iterator_impl& operator--()
+            {
+                if (m_ptr == m_seg_begin || m_global_index == m_container->size())
+                {
+                    --m_global_index;
+                    load_segment_cache();
+                }
+                else
+                {
+                    --m_ptr;
+                    --m_global_index;
+                }
+                return *this;
+            }
+
+            iterator_impl operator--(int)
+            {
+                iterator_impl temp = *this;
+                --(*this);
+                return temp;
+            }
+
+            iterator_impl& operator+=(difference_type n)
+            {
+                if (n == 0) return *this;
+
+                if (m_ptr)
+                {
+                    if (n > 0 && (m_ptr + n < m_seg_end))
+                    {
+                        m_ptr += n;
+                        m_global_index += n;
+                        return *this;
+                    }
+                    else if (n < 0 && (m_ptr + n >= m_seg_begin))
+                    {
+                        m_ptr += n;
+                        m_global_index += n;
+                        return *this;
+                    }
+                }
+
+                m_global_index += n;
+                load_segment_cache();
+                return *this;
+            }
+
+            iterator_impl& operator-=(difference_type n)
+            {
+                return *this += (-n);
+            }
+
+            iterator_impl operator+(difference_type n) const
+            {
+                iterator_impl temp = *this;
+                temp += n;
+                return temp;
+            }
+
+            iterator_impl operator-(difference_type n) const
+            {
+                iterator_impl temp = *this;
+                temp -= n;
+                return temp;
+            }
+
+            difference_type operator-(const iterator_impl<true>& other) const
+            {
+                return static_cast<difference_type>(m_global_index) - static_cast<difference_type>(other.
+                    m_global_index);
+            }
+
+            difference_type operator-(const iterator_impl<false>& other) const
+            {
+                return static_cast<difference_type>(m_global_index) - static_cast<difference_type>(other.
+                    m_global_index);
+            }
+
+            reference operator[](difference_type n) const
+            {
+                return *(*this + n);
+            }
+
+            bool operator==(const iterator_impl<true>& other) const
+            {
+                return m_global_index == other.m_global_index;
+            }
+
+            bool operator==(const iterator_impl<false>& other) const
+            {
+                return m_global_index == other.m_global_index;
+            }
+
+            bool operator!=(const iterator_impl<true>& other) const { return !(*this == other); }
+            bool operator!=(const iterator_impl<false>& other) const { return !(*this == other); }
+            bool operator<(const iterator_impl<true>& other) const { return m_global_index < other.m_global_index; }
+            bool operator<(const iterator_impl<false>& other) const { return m_global_index < other.m_global_index; }
+            bool operator>(const iterator_impl<true>& other) const { return m_global_index > other.m_global_index; }
+            bool operator>(const iterator_impl<false>& other) const { return m_global_index > other.m_global_index; }
+            bool operator<=(const iterator_impl<true>& other) const { return m_global_index <= other.m_global_index; }
+            bool operator<=(const iterator_impl<false>& other) const { return m_global_index <= other.m_global_index; }
+            bool operator>=(const iterator_impl<true>& other) const { return m_global_index >= other.m_global_index; }
+            bool operator>=(const iterator_impl<false>& other) const { return m_global_index >= other.m_global_index; }
+
+            friend class iterator_impl<!Const>;
+            friend class segmented_dynar;
+        };
+
+        using iterator = iterator_impl<false>;
+        using const_iterator = iterator_impl<true>;
+
+        iterator begin() { return iterator(this, 0); }
+        iterator end() { return iterator(this, m_size); }
+        const_iterator begin() const { return const_iterator(this, 0); }
+        const_iterator end() const { return const_iterator(this, m_size); }
+        const_iterator cbegin() const { return begin(); }
+        const_iterator cend() const { return end(); }
     };
 }
-#endif //RPNXHADIX_SEGMENTED_DYNAR_HPP
+#endif
