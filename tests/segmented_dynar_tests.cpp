@@ -15,6 +15,7 @@
 #include "gtest/gtest.h"
 
 #include "rpnx/segmented_dynar.hpp"
+#include "failing_allocator.hpp"
 
 TEST(segmented_dynar, construct_empty)
 {
@@ -166,4 +167,28 @@ TEST(segmented_dynar, copy_constructor_and_assignment)
     {
         EXPECT_EQ(arr3[i], arr1[i]);
     }
+}
+
+TEST(segmented_dynar, reserve_leak_on_exception)
+{
+    using Alloc = testutils::failing_allocator<int>;
+    testutils::failing_allocator<int>::allocation_count = 0;
+    testutils::failing_allocator<int>::fail_at = 999;
+    testutils::failing_allocator<int>::total_allocations = 0;
+
+    rpnx::segmented_dynar<int, Alloc> arr;
+
+    // Initial allocations to set up some state
+    arr.push_back(1);
+    arr.push_back(2);
+
+    int initial_allocations = testutils::failing_allocator<int>::total_allocations;
+
+    // Now we want reserve to fail after some segments are allocated
+    testutils::failing_allocator<int>::fail_at = testutils::failing_allocator<int>::allocation_count + 2;
+    // Fail on the 2nd NEW element allocation in reserve
+
+    EXPECT_THROW(arr.reserve(100), std::bad_alloc);
+
+    EXPECT_EQ(testutils::failing_allocator<int>::total_allocations, initial_allocations);
 }

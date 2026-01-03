@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef RPNXHADIX_SEGMENTED_DYNAR_HPP
-#define RPNXHADIX_SEGMENTED_DYNAR_HPP
+#ifndef RPNX_SEGMENTED_DYNAR_HPP
+#define RPNX_SEGMENTED_DYNAR_HPP
 #include <memory>
 #include <bit>
 #include <cassert>
@@ -162,14 +162,18 @@ namespace rpnx
             segment_allocator_type typed_allocator(alloc);
             T** new_segments = segment_alloc_traits::allocate(typed_allocator, new_segment_count);
 
+            using element_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
+            using element_alloc_traits = std::allocator_traits<element_allocator_type>;
+            element_allocator_type elem_alloc(alloc);
             try
             {
-                using element_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<T>;
-                using element_alloc_traits = std::allocator_traits<element_allocator_type>;
-                element_allocator_type elem_alloc(alloc);
                 for (std::size_t i = 0; i < old_segment_count; ++i)
                 {
                     new_segments[i] = m_segments[i];
+                }
+                for (std::size_t i = old_segment_count; i < new_segment_count; ++i)
+                {
+                    new_segments[i] = nullptr;
                 }
                 for (std::size_t i = old_segment_count; i < new_segment_count; ++i)
                 {
@@ -177,11 +181,18 @@ namespace rpnx
                 }
                 if (m_segments != nullptr)
                 {
-                    typed_allocator.deallocate(m_segments, old_segment_count);
+                    segment_alloc_traits::deallocate(typed_allocator, m_segments, old_segment_count);
                 }
             }
             catch (...)
             {
+                for (std::size_t i = old_segment_count; i < new_segment_count; ++i)
+                {
+                    if (new_segments[i] != nullptr)
+                    {
+                        element_alloc_traits::deallocate(elem_alloc, new_segments[i], segment_size(i));
+                    }
+                }
                 segment_alloc_traits::deallocate(typed_allocator, new_segments, new_segment_count);
                 throw;
             }
