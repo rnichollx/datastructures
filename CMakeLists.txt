@@ -14,6 +14,7 @@ include(GNUInstallDirs)
 
 add_library(rpnx_datastructures INTERFACE
         include/rpnx/segmented_dynar.hpp
+        include/rpnx/sharded_unordered_map.hpp
 )
 
 add_library(RPNX::datastructures ALIAS rpnx_datastructures)
@@ -55,6 +56,7 @@ if (RPNX_DS_BUILD_TESTS)
     enable_testing()
     add_executable(rpnx_datastructures_tests
         tests/segmented_dynar_tests.cpp
+            tests/sharded_map_tests.cpp
     )
     target_link_libraries(rpnx_datastructures_tests PRIVATE RPNX::datastructures GTest::gtest_main GTest::gtest)
     gtest_discover_tests(rpnx_datastructures_tests)
