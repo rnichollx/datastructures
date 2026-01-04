@@ -263,6 +263,55 @@ namespace rpnx
             return (*this)[index];
         }
 
+        T& front()
+        {
+            return (*this)[0];
+        }
+
+        T const& front() const
+        {
+            return (*this)[0];
+        }
+
+        T& back()
+        {
+            return (*this)[m_size - 1];
+        }
+
+        T const& back() const
+        {
+            return (*this)[m_size - 1];
+        }
+
+        void assign(std::size_t count, const T& value)
+        {
+            clear();
+            reserve(count);
+            for (std::size_t i = 0; i < count; ++i)
+            {
+                push_back(value);
+            }
+        }
+
+        template <typename InputIt, typename = std::enable_if_t<!std::is_integral_v<InputIt>>>
+        void assign(InputIt first, InputIt last)
+        {
+            clear();
+            if constexpr (std::is_base_of_v<std::forward_iterator_tag, typename std::iterator_traits<InputIt>::iterator_category>)
+            {
+                reserve(std::distance(first, last));
+            }
+            for (; first != last; ++first)
+            {
+                push_back(*first);
+            }
+        }
+
+        void assign(std::initializer_list<T> ilist)
+        {
+            assign(ilist.begin(), ilist.end());
+        }
+
         void pop_back()
         {
             --m_size;

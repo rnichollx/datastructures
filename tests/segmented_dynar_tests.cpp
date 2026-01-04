@@ -115,6 +115,55 @@ TEST(segmented_dynar, clear_and_reset)
     EXPECT_EQ(arr.capacity(), 0);
 }
 
+TEST(segmented_dynar, front_back)
+{
+    rpnx::segmented_dynar<int> arr;
+    arr.push_back(10);
+    arr.push_back(20);
+    arr.push_back(30);
+
+    EXPECT_EQ(arr.front(), 10);
+    EXPECT_EQ(arr.back(), 30);
+
+    arr.front() = 11;
+    arr.back() = 31;
+
+    EXPECT_EQ(arr[0], 11);
+    EXPECT_EQ(arr[2], 31);
+
+    const auto& carr = arr;
+    EXPECT_EQ(carr.front(), 11);
+    EXPECT_EQ(carr.back(), 31);
+}
+
+TEST(segmented_dynar, assign_count)
+{
+    rpnx::segmented_dynar<int> arr;
+    arr.push_back(1);
+    arr.assign(5, 42);
+    EXPECT_EQ(arr.size(), 5);
+    for (int i = 0; i < 5; ++i) EXPECT_EQ(arr[i], 42);
+}
+
+TEST(segmented_dynar, assign_range)
+{
+    rpnx::segmented_dynar<int> arr;
+    std::vector<int> vec = { 1, 2, 3, 4, 5 };
+    arr.assign(vec.begin(), vec.end());
+    EXPECT_EQ(arr.size(), 5);
+    for (int i = 0; i < 5; ++i) EXPECT_EQ(arr[i], i + 1);
+}
+
+TEST(segmented_dynar, assign_initializer_list)
+{
+    rpnx::segmented_dynar<int> arr;
+    arr.assign({ 10, 20, 30 });
+    EXPECT_EQ(arr.size(), 3);
+    EXPECT_EQ(arr[0], 10);
+    EXPECT_EQ(arr[1], 20);
+    EXPECT_EQ(arr[2], 30);
+}
+
 TEST(segmented_dynar, emplace_back)
 {
     rpnx::segmented_dynar<std::pair<int, std::string>> arr;
