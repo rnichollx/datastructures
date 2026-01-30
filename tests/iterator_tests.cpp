@@ -10,13 +10,14 @@
 
 TEST(forward_bounded_iterator, basic_traversal_with_neq_only)
 {
-    std::vector<int> v{1,2,3,4,5};
+    std::vector<int> v{1, 2, 3, 4, 5};
 
-    auto it  = rpnx::make_forward_bounded_iterator(v.begin(), v.end());
-    auto end = rpnx::make_forward_bounded_iterator(v.end(),   v.end());
+    auto it = rpnx::make_forward_bounded_iterator(v.begin(), v.end());
+    auto end = rpnx::make_forward_bounded_iterator(v.end(), v.end());
 
     int sum = 0;
-    while (it != end) {
+    while (it != end)
+    {
         sum += *it;
         ++it;
     }

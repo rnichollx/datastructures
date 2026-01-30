@@ -142,22 +142,28 @@ TEST(segmented_dynar, assign_count)
     arr.push_back(1);
     arr.assign(5, 42);
     EXPECT_EQ(arr.size(), 5);
-    for (int i = 0; i < 5; ++i) EXPECT_EQ(arr[i], 42);
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_EQ(arr[i], 42);
+    }
 }
 
 TEST(segmented_dynar, assign_range)
 {
     rpnx::segmented_dynar<int> arr;
-    std::vector<int> vec = { 1, 2, 3, 4, 5 };
+    std::vector<int> vec = {1, 2, 3, 4, 5};
     arr.assign(vec.begin(), vec.end());
     EXPECT_EQ(arr.size(), 5);
-    for (int i = 0; i < 5; ++i) EXPECT_EQ(arr[i], i + 1);
+    for (int i = 0; i < 5; ++i)
+    {
+        EXPECT_EQ(arr[i], i + 1);
+    }
 }
 
 TEST(segmented_dynar, assign_initializer_list)
 {
     rpnx::segmented_dynar<int> arr;
-    arr.assign({ 10, 20, 30 });
+    arr.assign({10, 20, 30});
     EXPECT_EQ(arr.size(), 3);
     EXPECT_EQ(arr[0], 10);
     EXPECT_EQ(arr[1], 20);
