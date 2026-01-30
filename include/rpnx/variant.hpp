@@ -272,7 +272,7 @@ namespace rpnx
         }
         else if constexpr (C == call_type::except_on_missing)
         {
-            if (std::is_invocable< F, decltype(variant.template get_n< N >()) >::value)
+            if constexpr (std::is_invocable_v< F, decltype(variant.template get_n_unchecked< N >()) >)
             {
                 if constexpr (std::is_same_v< R, void >)
                 {
@@ -291,7 +291,7 @@ namespace rpnx
         }
         else if constexpr (C == call_type::optional)
         {
-            if constexpr (std::is_invocable< F, decltype(variant.template get_n< N >()) >::value)
+            if constexpr (std::is_invocable_v< F, decltype(variant.template get_n_unchecked< N >()) >)
             {
                 if constexpr (std::is_same_v< R, void >)
                 {
@@ -303,7 +303,7 @@ namespace rpnx
                     return func(variant.template get_n_unchecked< N >());
                 }
             }
-            else if constexpr (!std::is_same< R, void >::value)
+            else if constexpr (!std::is_same_v< R, void >)
             {
                 return R{};
             }

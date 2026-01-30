@@ -162,9 +162,70 @@ TEST(variant, conversion_constructor)
     ASSERT_EQ(v2.get_as<double>(), 1.5);
 }
 
-TEST(variant, reset)
+TEST(variant, exceptions)
+{
+    rpnx::variant<int, std::string> v(42);
+
+    // Accessing wrong type
+    ASSERT_THROW(v.get_as<std::string>(), std::bad_variant_access);
+    ASSERT_THROW(v.as<std::string>(), std::bad_variant_access);
+    ASSERT_THROW(v.unwrap<std::string>(), std::bad_variant_access);
+    ASSERT_THROW(v.get_n<1>(), std::bad_variant_access);
+
+    // Invalid variant (after reset)
+    v.reset();
+    ASSERT_THROW(v.index(), std::bad_variant_access);
+    ASSERT_THROW(v.type(), std::bad_variant_access);
+    ASSERT_THROW(v.get_as<int>(), std::bad_variant_access);
+    ASSERT_THROW(v.get_n<0>(), std::bad_variant_access);
+}
+
+struct throwing_type
+{
+    throwing_type() { throw std::runtime_error("constructor throw"); }
+    throwing_type(const throwing_type&) { throw std::runtime_error("copy constructor throw"); }
+    throwing_type(throwing_type&&) { throw std::runtime_error("move constructor throw"); }
+    auto operator<=>(const throwing_type&) const = default;
+};
+
+TEST(variant, constructor_exceptions)
+{
+    // Default constructor of first type throws
+    ASSERT_THROW((rpnx::variant<throwing_type, int>()), std::runtime_error);
+
+    rpnx::variant<int, throwing_type> v(42);
+    // Assignment to a type whose constructor throws
+    ASSERT_THROW(v = throwing_type(), std::runtime_error);
+    // Ensure it remains in the old state (strong exception guarantee)
+    ASSERT_EQ(v.get_as<int>(), 42);
+}
+
+struct int_only_visitor {
+    void operator()(int) {}
+};
+
+TEST(variant, visitor_exceptions)
+{
+    rpnx::variant<int, std::string> v(42);
+
+    // Visitor that throws
+    ASSERT_THROW(
+        rpnx::apply_visitor<void>(v, [](auto&&) { throw std::runtime_error("visitor throw"); }),
+        std::runtime_error
+    );
+
+    // apply_visitor_checked with missing overload
+    // v contains int, and int_only_visitor HAS int overload, so it should NOT throw
+    ASSERT_NO_THROW(rpnx::apply_visitor_checked<void>(v, int_only_visitor{}));
+
+    v = std::string("hello");
+    // v contains string, and int_only_visitor LACKS string overload, so it SHOULD throw
+    ASSERT_THROW(rpnx::apply_visitor_checked<void>(v, int_only_visitor{}), std::bad_variant_access);
+}
+
+TEST(variant, checked_visitor_exception)
 {
     rpnx::variant<int, std::string> v(std::string("hello"));
-    v.reset();
-    ASSERT_THROW(v.get_as<int>(), std::bad_variant_access);
+    // int_only_visitor cannot be called with std::string
+    ASSERT_THROW(rpnx::apply_visitor_checked<void>(v, int_only_visitor{}), std::bad_variant_access);
 }
