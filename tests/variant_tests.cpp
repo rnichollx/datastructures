@@ -2,30 +2,169 @@
 
 #include <gtest/gtest.h>
 #include "rpnx/variant.hpp"
+#include <string>
+#include <vector>
 
-
-TEST(variant, variant_meta)
+TEST(variant, default_constructor)
 {
-    rpnx::variant<int, std::string> v = 5;
-    ASSERT_TRUE(v.index() == 0);
-    ASSERT_TRUE(v.get_as< int >() == 5);
-    v = std::string("hello");
-    ASSERT_TRUE(v.index() == 1);
-    ASSERT_TRUE(v.get_as< std::string >() == "hello");
+    rpnx::variant<int, std::string> v;
+    ASSERT_EQ(v.index(), 0);
+    ASSERT_EQ(v.get_as<int>(), 0);
+}
+
+TEST(variant, value_constructor)
+{
+    rpnx::variant<int, std::string> v1(5);
+    ASSERT_EQ(v1.index(), 0);
+    ASSERT_EQ(v1.get_as<int>(), 5);
+
+    rpnx::variant<int, std::string> v2(std::string("hello"));
+    ASSERT_EQ(v2.index(), 1);
+    ASSERT_EQ(v2.get_as<std::string>(), "hello");
+
+    rpnx::variant<int, std::string> v3 = 10;
+    ASSERT_EQ(v3.index(), 0);
+    ASSERT_EQ(v3.get_as<int>(), 10);
+}
+
+TEST(variant, copy_move_constructor)
+{
+    rpnx::variant<int, std::string> v1(std::string("test"));
+    rpnx::variant<int, std::string> v2(v1);
+    ASSERT_EQ(v2.index(), 1);
+    ASSERT_EQ(v2.get_as<std::string>(), "test");
+
+    rpnx::variant<int, std::string> v3(std::move(v1));
+    ASSERT_EQ(v3.index(), 1);
+    ASSERT_EQ(v3.get_as<std::string>(), "test");
+}
+
+TEST(variant, assignment)
+{
+    rpnx::variant<int, std::string> v;
+    v = 10;
+    ASSERT_EQ(v.index(), 0);
+    ASSERT_EQ(v.get_as<int>(), 10);
+
+    v = std::string("world");
+    ASSERT_EQ(v.index(), 1);
+    ASSERT_EQ(v.get_as<std::string>(), "world");
 
     rpnx::variant<int, std::string> v2;
+    v2 = v;
+    ASSERT_EQ(v2.index(), 1);
+    ASSERT_EQ(v2.get_as<std::string>(), "world");
 
-    ASSERT_THROW((v2.get_as<std::string>()), std::bad_variant_access);
-    ASSERT_TRUE(v2 < v);
+    rpnx::variant<int, std::string> v3;
+    v3 = std::move(v2);
+    ASSERT_EQ(v3.index(), 1);
+    ASSERT_EQ(v3.get_as<std::string>(), "world");
+}
 
-    std::pair<int, rpnx::variant<int, std::string>> p = {5, std::string("hello")};
+TEST(variant, accessors)
+{
+    rpnx::variant<int, std::string> v(42);
 
-    std::map<rpnx::variant<int, std::string>, int> mp;
-    mp[v2] = 9;
+    ASSERT_EQ(v.get_as<int>(), 42);
+    ASSERT_EQ(v.as<int>(), 42);
+    ASSERT_EQ(v.unwrap<int>(), 42);
+    ASSERT_EQ(v.static_cast_as<int>(), 42);
+    ASSERT_EQ(v.get_n<0>(), 42);
 
-    v2 = 5;
-    mp[v2] = 6;
-    ASSERT_TRUE(mp[0] == 9);
-    ASSERT_TRUE(mp[5] == 6);
-    ASSERT_TRUE(mp[5] != 7);
+    ASSERT_THROW(v.get_as<std::string>(), std::bad_variant_access);
+    ASSERT_THROW(v.get_n<1>(), std::bad_variant_access);
+
+    ASSERT_NE(v.cast_ptr<int>(), nullptr);
+    ASSERT_EQ(*v.cast_ptr<int>(), 42);
+    ASSERT_EQ(v.cast_ptr<std::string>(), nullptr);
+
+    v = std::string("test");
+    ASSERT_EQ(v.get_as<std::string>(), "test");
+    ASSERT_EQ(v.get_n<1>(), "test");
+    ASSERT_EQ(v.static_cast_as<std::string>(), "test");
+}
+
+TEST(variant, type_info)
+{
+    rpnx::variant<int, std::string> v(42);
+    ASSERT_EQ(v.type(), typeid(int));
+    ASSERT_EQ(v.type_index(), std::type_index(typeid(int)));
+    ASSERT_TRUE(v.type_is<int>());
+    ASSERT_FALSE(v.type_is<std::string>());
+
+    v = std::string("hello");
+    ASSERT_EQ(v.type(), typeid(std::string));
+    ASSERT_TRUE(v.type_is<std::string>());
+}
+
+TEST(variant, comparisons)
+{
+    rpnx::variant<int, std::string> v1(10);
+    rpnx::variant<int, std::string> v2(20);
+    rpnx::variant<int, std::string> v3(10);
+    rpnx::variant<int, std::string> v4(std::string("abc"));
+
+    ASSERT_TRUE(v1 == v3);
+    ASSERT_FALSE(v1 == v2);
+    ASSERT_TRUE(v1 != v2);
+    ASSERT_TRUE(v1 < v2);
+    ASSERT_TRUE(v1 < v4); // different indices, compared by index
+    ASSERT_FALSE(v4 < v1);
+
+    ASSERT_EQ(v1 <=> v3, std::strong_ordering::equal);
+    ASSERT_EQ(v1 <=> v2, std::strong_ordering::less);
+}
+
+TEST(variant, visitors)
+{
+    rpnx::variant<int, std::string> v(42);
+
+    int result = rpnx::apply_visitor<int>(v, [](auto&& arg) -> int {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, int>) return arg;
+        else return 0;
+    });
+    ASSERT_EQ(result, 42);
+
+    bool matched = v.match<int>([](int val) {
+        ASSERT_EQ(val, 42);
+    });
+    ASSERT_TRUE(matched);
+
+    matched = v.match<std::string>([](const std::string& s) {
+        GTEST_FAIL() << "Should not match std::string";
+    });
+    ASSERT_FALSE(matched);
+
+    bool tested = v.test<int>([](int val) { return val > 40; });
+    ASSERT_TRUE(tested);
+
+    tested = v.test<int>([](int val) { return val < 40; });
+    ASSERT_FALSE(tested);
+}
+
+TEST(variant, complex_types)
+{
+    rpnx::variant<std::vector<int>, std::string> v(std::vector<int>{1, 2, 3});
+    ASSERT_EQ(v.index(), 0);
+    ASSERT_EQ(v.get_as<std::vector<int>>().size(), 3);
+
+    v = std::string("a long string that hopefully triggers heap allocation if it wasn't already");
+    ASSERT_EQ(v.index(), 1);
+    ASSERT_EQ(v.get_as<std::string>()[0], 'a');
+}
+
+TEST(variant, conversion_constructor)
+{
+    rpnx::variant<int, double> v1(1.5);
+    rpnx::variant<int, double, std::string> v2(v1);
+    ASSERT_EQ(v2.index(), 1);
+    ASSERT_EQ(v2.get_as<double>(), 1.5);
+}
+
+TEST(variant, reset)
+{
+    rpnx::variant<int, std::string> v(std::string("hello"));
+    v.reset();
+    ASSERT_THROW(v.get_as<int>(), std::bad_variant_access);
 }

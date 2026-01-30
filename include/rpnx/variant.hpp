@@ -183,12 +183,12 @@ namespace rpnx
 
         // Function to perform a three-way comparison of two objects of type T
         template < typename T >
-        static constexpr auto type_three_way_func(void const* lhs, void const* rhs)
+        static constexpr std::strong_ordering type_three_way_func(void const* lhs, void const* rhs)
         {
             if constexpr (std::three_way_comparable_with< T, T >)
             {
                 // If T supports three-way comparison with itself
-                return *static_cast< const T* >(lhs) <=> *static_cast< const T* >(rhs);
+                return std::strong_order(*static_cast< const T* >(lhs), *static_cast< const T* >(rhs));
             }
             else
             {
@@ -571,7 +571,7 @@ namespace rpnx
             assert(valid());
             // reset();
             assert((m_vinf == nullptr) == (m_data == nullptr));
-            rpnx::apply_visitor< bool >(variant_convert_to< Allocator, Ts... >(*this), other);
+            rpnx::apply_visitor< bool >(other, variant_convert_to< Allocator, Ts... >(*this));
             assert(valid());
         }
 
@@ -696,9 +696,17 @@ namespace rpnx
         T& static_cast_as()
         {
             return apply_visitor< T& >(
+                *this,
                 [](auto& arg) -> T&
                 {
-                    return static_cast< T& >(arg);
+                    if constexpr (std::is_convertible_v<decltype(arg), T&>) {
+                        return static_cast< T& >(arg);
+                    } else {
+                        // This branch should never be taken at runtime if the variant holds the correct type.
+                        // However, apply_visitor instantiates the lambda for all possible types in the variant.
+                        // We throw to satisfy the return type and indicate an internal error if it ever happened.
+                        throw std::bad_variant_access();
+                    }
                 });
         }
 
@@ -706,9 +714,14 @@ namespace rpnx
         T const& static_cast_as() const
         {
             return apply_visitor< T const& >(
+                *this,
                 [](auto& arg) -> T const&
                 {
-                    return static_cast< T const& >(arg);
+                    if constexpr (std::is_convertible_v<decltype(arg), T const&>) {
+                        return static_cast< T const& >(arg);
+                    } else {
+                        throw std::bad_variant_access();
+                    }
                 });
         }
 
