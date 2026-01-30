@@ -10,16 +10,15 @@
 
 namespace rpnx
 {
-    // A lightweight forward iterator wrapper that is bounded to [first, last).
-    // Unlike rpnx::bounded_iterator, this only provides forward-iterator operations
-    // and comparison via operator!= (sufficient for typical single-pass loops).
+    // A lightweight forward iterator wrapper has security range checking.
+    // It will throw an exception if used illegally, instead of undefined behavior.
     template <class It>
-    class forward_bounded_iterator
+    class bounded_iterator
     {
         using traits = std::iterator_traits<It>;
 
         static_assert(std::is_base_of_v<std::forward_iterator_tag, typename traits::iterator_category>,
-                      "rpnx::forward_bounded_iterator requires a forward iterator");
+                      "rpnx::bounded_iterator requires a forward iterator");
 
     public:
         using iterator_type = It;
@@ -29,9 +28,9 @@ namespace rpnx
         using pointer = typename traits::pointer;
         using reference = typename traits::reference;
 
-        forward_bounded_iterator() = default;
+        bounded_iterator() = default;
 
-        constexpr forward_bounded_iterator(It current, It last)
+        constexpr bounded_iterator(It current, It last)
             : m_current(current), m_last(last)
         {
         }
@@ -57,7 +56,7 @@ namespace rpnx
         }
 
         // Increment (bounded: cannot increment at end)
-        constexpr forward_bounded_iterator& operator++()
+        constexpr bounded_iterator& operator++()
         {
             if (m_current == m_last)
             {
@@ -67,30 +66,28 @@ namespace rpnx
             return *this;
         }
 
-        constexpr forward_bounded_iterator operator++(int)
+        constexpr bounded_iterator operator++(int)
         {
-            forward_bounded_iterator tmp = *this;
+            bounded_iterator tmp = *this;
             ++(*this);
             return tmp;
         }
 
-        constexpr bool operator==(const forward_bounded_iterator& rhs) const
+        constexpr bool operator==(const bounded_iterator& rhs) const
         {
             return m_current == rhs.m_current;
         }
 
-        constexpr bool operator!=(const forward_bounded_iterator& rhs) const { return m_current != rhs.m_current; }
+        constexpr bool operator!=(const bounded_iterator& rhs) const { return m_current != rhs.m_current; }
 
     private:
         It m_current{};
         It m_last{};
     };
 
-    // A lightweight wrapper that bounds a random-access iterator `It` to the half-open range [first, last).
-    // The iterator models the same category as `It` and forwards operations while asserting
-    // that movements stay within the specified bounds in debug builds.
+    //
     template <class It>
-    class bounded_iterator
+    class bidirectional_bounded_iterator
     {
         using traits = std::iterator_traits<It>;
 
@@ -105,10 +102,10 @@ namespace rpnx
         using pointer = typename traits::pointer;
         using reference = typename traits::reference;
 
-        bounded_iterator() = default;
+        bidirectional_bounded_iterator() = default;
 
         // Construct from current, first, last — all must be from the same underlying range
-        constexpr bounded_iterator(It current, It first, It last)
+        constexpr bidirectional_bounded_iterator(It current, It first, It last)
             : m_current(current), m_first(first), m_last(last)
         {
             if (!(m_first <= m_last))
@@ -125,7 +122,7 @@ namespace rpnx
         // Dereference
         constexpr reference operator*() const
         {
-            if (!(m_current >= m_first && m_current < m_last))
+            if (!(m_current >= m_first && m_current < m_last)) [[unlikely]]
             {
                 throw std::out_of_range("rpnx::bounded_iterator: dereference out of range");
             }
@@ -134,7 +131,7 @@ namespace rpnx
 
         constexpr pointer operator->() const
         {
-            if (!(m_current >= m_first && m_current < m_last))
+            if (!(m_current >= m_first && m_current < m_last)) [[unlikely]]
             {
                 throw std::out_of_range("rpnx::bounded_iterator: dereference out of range");
             }
@@ -142,9 +139,9 @@ namespace rpnx
         }
 
         // Increment / Decrement
-        constexpr bounded_iterator& operator++()
+        constexpr bidirectional_bounded_iterator& operator++()
         {
-            if (!(m_current < m_last))
+            if (!(m_current < m_last)) [[unlikely]]
             {
                 throw std::out_of_range("rpnx::bounded_iterator: ++ past end");
             }
@@ -152,16 +149,16 @@ namespace rpnx
             return *this;
         }
 
-        constexpr bounded_iterator operator++(int)
+        constexpr bidirectional_bounded_iterator operator++(int)
         {
-            bounded_iterator tmp = *this;
+            bidirectional_bounded_iterator tmp = *this;
             ++(*this);
             return tmp;
         }
 
-        constexpr bounded_iterator& operator--()
+        constexpr bidirectional_bounded_iterator& operator--()
         {
-            if (!(m_current > m_first))
+            if (!(m_current > m_first)) [[unlikely]]
             {
                 throw std::out_of_range("rpnx::bounded_iterator: -- before begin");
             }
@@ -169,44 +166,58 @@ namespace rpnx
             return *this;
         }
 
-        constexpr bounded_iterator operator--(int)
+        constexpr bidirectional_bounded_iterator operator--(int)
         {
-            bounded_iterator tmp = *this;
+            bidirectional_bounded_iterator tmp = *this;
             --(*this);
             return tmp;
         }
 
         // Random access helpers
-        constexpr bounded_iterator& operator+=(difference_type n)
+        constexpr bidirectional_bounded_iterator& operator+=(difference_type n)
         {
-            if (!((n >= 0 && m_current + n <= m_last) || (n < 0 && m_current - (-n) >= m_first)))
+            if (n >= 0)
             {
-                throw std::out_of_range("rpnx::bounded_iterator: addition moves out of bounds");
+                auto max = std::distance(m_current, m_last);
+                if (n > max) [[unlikely]]
+                {
+                    throw std::out_of_range("rpnx::bounded_iterator: += past end");
+                }
+                m_current += n;
+                return *this;
             }
-            m_current += n;
-            return *this;
+            else
+            {
+                auto max = std::distance(m_current, m_first);
+                if (max < n) [[unlikely]]
+                {
+                    throw std::out_of_range("rpnx::bounded_iterator: += before begin");
+                }
+                m_current += n;
+                return *this;
+            }
         }
 
-        constexpr bounded_iterator& operator-=(difference_type n)
+        constexpr bidirectional_bounded_iterator& operator-=(difference_type n)
         {
             return (*this) += (-n);
         }
 
-        constexpr bounded_iterator operator+(difference_type n) const
+        constexpr bidirectional_bounded_iterator operator+(difference_type n) const
         {
-            bounded_iterator tmp = *this;
+            bidirectional_bounded_iterator tmp = *this;
             tmp += n;
             return tmp;
         }
 
-        friend constexpr bounded_iterator operator+(difference_type n, const bounded_iterator& it)
+        friend constexpr bidirectional_bounded_iterator operator+(difference_type n, const bidirectional_bounded_iterator& it)
         {
             return it + n;
         }
 
-        constexpr bounded_iterator operator-(difference_type n) const
+        constexpr bidirectional_bounded_iterator operator-(difference_type n) const
         {
-            bounded_iterator tmp = *this;
+            bidirectional_bounded_iterator tmp = *this;
             tmp -= n;
             return tmp;
         }
@@ -216,29 +227,20 @@ namespace rpnx
             return *(*this + n);
         }
 
-        // Distance between two bounded iterators (must share the same bounds)
-        constexpr difference_type operator-(const bounded_iterator& other) const
+
+        constexpr difference_type operator-(const bidirectional_bounded_iterator& other) const
         {
-            if (!(m_first == other.m_first && m_last == other.m_last))
-            {
-                throw std::out_of_range("rpnx::bounded_iterator: subtraction across different bounds");
-            }
             return m_current - other.m_current;
         }
 
-        // Comparisons compare the current positions. Bounds must match; otherwise throw.
-        constexpr bool operator==(const bounded_iterator& other) const
+        constexpr bool operator==(const bidirectional_bounded_iterator& other) const
         {
-            if (!(m_first == other.m_first && m_last == other.m_last))
-            {
-                throw std::out_of_range("rpnx::bounded_iterator: comparison across different bounds");
-            }
             return m_current == other.m_current;
         }
 
-        constexpr bool operator!=(const bounded_iterator& other) const { return !(*this == other); }
+        constexpr bool operator!=(const bidirectional_bounded_iterator& other) const { return !(*this == other); }
 
-        constexpr bool operator<(const bounded_iterator& other) const
+        constexpr bool operator<(const bidirectional_bounded_iterator& other) const
         {
             if (!(m_first == other.m_first && m_last == other.m_last))
             {
@@ -247,9 +249,9 @@ namespace rpnx
             return m_current < other.m_current;
         }
 
-        constexpr bool operator>(const bounded_iterator& other) const { return other < *this; }
-        constexpr bool operator<=(const bounded_iterator& other) const { return !(other < *this); }
-        constexpr bool operator>=(const bounded_iterator& other) const { return !(*this < other); }
+        constexpr bool operator>(const bidirectional_bounded_iterator& other) const { return other < *this; }
+        constexpr bool operator<=(const bidirectional_bounded_iterator& other) const { return !(other < *this); }
+        constexpr bool operator>=(const bidirectional_bounded_iterator& other) const { return !(*this < other); }
 
     private:
         It m_current{};
@@ -258,15 +260,15 @@ namespace rpnx
     };
 
     template <class It>
-    constexpr bounded_iterator<It> make_bounded_iterator(It it, It first, It last) noexcept
+    constexpr bidirectional_bounded_iterator<It> make_bounded_iterator(It it, It first, It last) noexcept
     {
-        return bounded_iterator<It>(it, first, last);
+        return bidirectional_bounded_iterator<It>(it, first, last);
     }
 
     template <class It>
-    constexpr forward_bounded_iterator<It> make_forward_bounded_iterator(It it, It last) noexcept
+    constexpr bounded_iterator<It> make_bounded_iterator(It it, It last) noexcept
     {
-        return forward_bounded_iterator<It>(it, last);
+        return bounded_iterator<It>(it, last);
     }
 }
 
