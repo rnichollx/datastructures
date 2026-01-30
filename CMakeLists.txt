@@ -2,22 +2,18 @@ cmake_minimum_required(VERSION 3.21)
 
 project(RPNXDataStructures LANGUAGES CXX)
 
-# Option: enable testing for this project (defaults to ON when top-level, OFF when used as a subproject)
-if (PROJECT_IS_TOP_LEVEL)
-  option(RPNX_DS_BUILD_TESTS "Enable testing for RPNX::DataStructures" ON)
-else()
-  option(RPNX_DS_BUILD_TESTS "Enable testing for RPNX::DataStructures" OFF)
-endif()
-
 
 include(GNUInstallDirs)
+set(BUILD_TESTING ON CACHE BOOL "Build tests for RPNXDataStructures")
+#include(CTest)
 
 add_library(rpnx_datastructures INTERFACE
         include/rpnx/segmented_dynar.hpp
         include/rpnx/sharded_unordered_map.hpp
+        include/rpnx/iterator.hpp
+        include/rpnx/variant.hpp
 )
 
-add_library(RPNX::datastructures ALIAS rpnx_datastructures)
 
 target_include_directories(rpnx_datastructures
     INTERFACE
@@ -51,13 +47,14 @@ install(
 )
 
 
-if (RPNX_DS_BUILD_TESTS)
+if (BUILD_TESTING)
     find_package(GTest REQUIRED)
-    enable_testing()
     add_executable(rpnx_datastructures_tests
         tests/segmented_dynar_tests.cpp
             tests/sharded_map_tests.cpp
+            tests/iterator_tests.cpp
+            tests/variant_tests.cpp
     )
-    target_link_libraries(rpnx_datastructures_tests PRIVATE RPNX::datastructures GTest::gtest_main GTest::gtest)
+    target_link_libraries(rpnx_datastructures_tests PRIVATE rpnx_datastructures GTest::gtest_main GTest::gtest)
     gtest_discover_tests(rpnx_datastructures_tests)
-endif ()
+endif()
