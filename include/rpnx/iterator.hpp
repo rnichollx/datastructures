@@ -39,18 +39,18 @@ namespace rpnx
         // Dereference (bounded: cannot dereference end sentinel)
         constexpr reference operator*() const
         {
-            if (m_current == m_last)
+            if (m_current == m_last) [[unlikely]]
             {
-                throw std::out_of_range("rpnx::forward_bounded_iterator: dereference at end");
+                throw std::out_of_range("rpnx::bounded_iterator: dereference at end");
             }
             return *m_current;
         }
 
         constexpr pointer operator->() const
         {
-            if (m_current == m_last)
+            if (m_current == m_last) [[unlikely]]
             {
-                throw std::out_of_range("rpnx::forward_bounded_iterator: dereference at end");
+                throw std::out_of_range("rpnx::bounded_iterator: dereference at end");
             }
             return std::addressof(*m_current);
         }
@@ -58,9 +58,9 @@ namespace rpnx
         // Increment (bounded: cannot increment at end)
         constexpr bounded_iterator& operator++()
         {
-            if (m_current == m_last)
+            if (m_current == m_last) [[unlikely]]
             {
-                throw std::out_of_range("rpnx::forward_bounded_iterator: ++ at end");
+                throw std::out_of_range("rpnx::bounded_iterator: ++ at end");
             }
             ++m_current;
             return *this;
@@ -78,7 +78,7 @@ namespace rpnx
             return m_current == rhs.m_current;
         }
 
-        constexpr bool operator!=(const bounded_iterator& rhs) const { return m_current != rhs.m_current; }
+        constexpr bool operator!=(const bounded_iterator& rhs) const { return !(*this == rhs); }
 
     private:
         It m_current{};
@@ -108,14 +108,6 @@ namespace rpnx
         constexpr bidirectional_bounded_iterator(It current, It first, It last)
             : m_current(current), m_first(first), m_last(last)
         {
-            if (!(m_first <= m_last))
-            {
-                throw std::out_of_range("rpnx::bounded_iterator: invalid bounds (first > last)");
-            }
-            if (!(m_current >= m_first && m_current <= m_last))
-            {
-                throw std::out_of_range("rpnx::bounded_iterator: current not within [first,last]");
-            }
         }
 
 
@@ -242,10 +234,6 @@ namespace rpnx
 
         constexpr bool operator<(const bidirectional_bounded_iterator& other) const
         {
-            if (!(m_first == other.m_first && m_last == other.m_last))
-            {
-                throw std::out_of_range("rpnx::bounded_iterator: comparison across different bounds");
-            }
             return m_current < other.m_current;
         }
 

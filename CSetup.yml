@@ -1,8 +1,11 @@
 default_configuration:
-    depends: [ googletest ]
+    depends: [ googletest ] # , metalib ]
     project_type: CMake
     cmake_package_name: RPNXDataStructures
 suggested_dep_sources:
     googletest:
         git:
             repository: "https://github.com/rnichollx/googletest.git"
+#    metalib:
+#        git:
+#            repository: "https://gitlab.com/rpnx/metalib.git"
