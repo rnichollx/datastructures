@@ -425,15 +425,31 @@ namespace rpnx
         }
     };
 
+    /**
+     * @brief Heap-backed tagged union with allocator-aware storage.
+     *
+     * The active alternative is tracked by a runtime index and each stored value
+     * is allocated through @p Allocator rebound to the concrete held type.
+     *
+     * @tparam Allocator Allocator used to allocate and destroy held values.
+     * @tparam Ts Variant alternative types.
+     */
     template < typename Allocator, typename... Ts >
     class basic_variant
     {
         struct variant_impl_info
         {
+            /// @brief Type-erased operations for one alternative type.
             typename variant_detail< Allocator >::variant_info m_general_info;
+            /// @brief Zero-based index of this alternative in `Ts...`.
             std::size_t m_index = 0;
         };
 
+        /**
+         * @brief Builds compile-time metadata for alternative @p N.
+         * @tparam N Alternative index.
+         * @return Metadata record for the selected alternative.
+         */
         template < std::size_t N >
         static consteval variant_impl_info calc_info()
         {
@@ -449,10 +465,18 @@ namespace rpnx
         template < std::size_t N >
         static constexpr variant_impl_info s_v_info_for = calc_info< N >();
 
+        /// @brief Pointer to currently-held object storage, or `nullptr` when valueless.
         void* m_data = nullptr;
+        /// @brief Pointer to metadata for the active alternative, or `nullptr` when valueless.
         variant_impl_info const* m_vinf = nullptr;
+        /// @brief Allocator instance used for all allocations/deallocations.
         [[no_unique_address]] Allocator m_alloc;
 
+        /**
+         * @brief Checks whether `T2` is exactly one of `Ts...` after cv/ref removal.
+         * @tparam T2 Type to inspect.
+         * @return `true` if a matching alternative exists.
+         */
         template < typename T2 >
         static constexpr bool has_cvref_removed_identical_type()
         {
@@ -460,11 +484,19 @@ namespace rpnx
             return (std::is_same_v< std::remove_cvref_t< T2 >, Ts > || ...);
         }
 
+        /**
+         * @brief Internal helper indicating whether no value is currently held.
+         * @return `true` when storage is empty.
+         */
         bool valueless() const
         {
             return m_data == nullptr;
         }
 
+        /**
+         * @brief Validates internal state invariants.
+         * @return `true` if pointer/index invariants are satisfied.
+         */
         bool valid() const
         {
             if (m_vinf == nullptr && m_data == nullptr)
@@ -486,8 +518,14 @@ namespace rpnx
         }
 
       public:
+        /// @brief Allocator type used by this variant.
         using allocator_type = Allocator;
 
+        /**
+         * @brief Default-constructs the first alternative.
+         * @param alloc Allocator instance used for internal allocations.
+         * @throws Any exception thrown by allocating or constructing `Ts[0]`.
+         */
         constexpr basic_variant(const allocator_type& alloc = allocator_type()) : m_alloc(alloc)
         {
             assert((m_vinf == nullptr) == (m_data == nullptr));
@@ -505,6 +543,10 @@ namespace rpnx
             assert(valid());
         }
 
+        /**
+         * @brief Move-constructs from another variant of the same type.
+         * @param other Source variant to move from.
+         */
         constexpr basic_variant(basic_variant< Allocator, Ts... >&& other) : m_alloc(std::move(other.m_alloc))
         {
             assert((m_vinf == nullptr) == (m_data == nullptr));
@@ -520,6 +562,11 @@ namespace rpnx
             assert(valid());
         }
 
+        /**
+         * @brief Copy-constructs from another variant of the same type.
+         * @param other Source variant to copy from.
+         * @throws Any exception thrown by allocation or copy construction of the held value.
+         */
         constexpr basic_variant(basic_variant< Allocator, Ts... > const& other) : m_alloc(std::allocator_traits< Allocator >::select_on_container_copy_construction(other.m_alloc))
         {
 
@@ -545,6 +592,9 @@ namespace rpnx
             assert(valid());
         }
 
+        /**
+         * @brief Destroys the currently-held value if present.
+         */
         ~basic_variant()
         {
             assert((m_vinf == nullptr) == (m_data == nullptr));
@@ -552,6 +602,9 @@ namespace rpnx
             assert((m_vinf == nullptr) == (m_data == nullptr));
         }
 
+        /**
+         * @brief Resets the variant to the valueless state.
+         */
         void reset()
         {
             assert(valid());
@@ -565,6 +618,12 @@ namespace rpnx
             assert(valid());
         }
 
+        /**
+         * @brief Converting copy constructor from another compatible variant type.
+         * @tparam Ts2 Source variant alternatives.
+         * @param other Source variant.
+         * @throws Any exception thrown while assigning the converted held value.
+         */
         template < typename... Ts2 >
         basic_variant(basic_variant< Allocator, Ts2... > const& other, std::enable_if_t< !std::is_same_v< basic_variant< Allocator, Ts... >, basic_variant< Allocator, Ts2... > > && !has_cvref_removed_identical_type< basic_variant< Allocator, Ts2... > >(), int > = 0) : basic_variant()
         {
@@ -575,6 +634,11 @@ namespace rpnx
             assert(valid());
         }
 
+        /**
+         * @brief Indicates whether this variant can be constructed from @p T.
+         * @tparam T Candidate source type.
+         * @return `true` when `T` can initialize one of `Ts...`, excluding self-type conversion.
+         */
         template < typename T >
         static consteval bool can_construct_subtype_with()
         {
@@ -589,6 +653,13 @@ namespace rpnx
             return ok1 && ok2;
         }
 
+        /**
+         * @brief Constructs the variant from a value convertible to one of the alternatives.
+         * @tparam T2 Source type.
+         * @param value Value used to initialize the held alternative.
+         * @param alloc Allocator instance used for internal allocations.
+         * @throws Any exception thrown by allocation or construction of the selected alternative.
+         */
         template < typename T2 >
         constexpr basic_variant(T2 const& value, const allocator_type& alloc = allocator_type(), std::enable_if_t< rpnx::basic_variant< Allocator, Ts... >::can_construct_subtype_with< T2 >(), int > = 0) : m_alloc(alloc)
         {
@@ -623,6 +694,13 @@ namespace rpnx
             assert(valid());
         }
 
+        /**
+         * @brief Assigns from a value convertible to one of the alternatives.
+         * @tparam T Source type.
+         * @param value Value to store.
+         * @return Reference to `*this`.
+         * @throws Any exception thrown by allocation or construction of the new value.
+         */
         template < typename T >
         constexpr basic_variant< Allocator, Ts... >& operator=(T const& value)
         {
@@ -676,6 +754,11 @@ namespace rpnx
             return *this;
         }
 
+        /**
+         * @brief Copy-assigns by value using swap semantics.
+         * @param other Source variant.
+         * @return Reference to `*this`.
+         */
         basic_variant< Allocator, Ts... >& operator=(basic_variant< Allocator, Ts... > other)
         {
             assert(valid());
@@ -692,11 +775,16 @@ namespace rpnx
             return *this;
         }
 
+        /**
+         * @brief Returns the held value cast to @p T& via visitor dispatch.
+         * @tparam T Target reference type.
+         * @return Reference to the held value as `T&`.
+         * @throws std::bad_variant_access If conversion is not valid for the active alternative.
+         */
         template < typename T >
         T& static_cast_as()
         {
-            return apply_visitor< T& >(
-                *this,
+            return this->template apply_visitor< T& >(
                 [](auto& arg) -> T&
                 {
                     if constexpr (std::is_convertible_v<decltype(arg), T&>) {
@@ -710,11 +798,16 @@ namespace rpnx
                 });
         }
 
+        /**
+         * @brief Returns the held value cast to @p T const& via visitor dispatch.
+         * @tparam T Target referenced type.
+         * @return Reference to the held value as `T const&`.
+         * @throws std::bad_variant_access If conversion is not valid for the active alternative.
+         */
         template < typename T >
         T const& static_cast_as() const
         {
-            return apply_visitor< T const& >(
-                *this,
+            return this->template apply_visitor< T const& >(
                 [](auto& arg) -> T const&
                 {
                     if constexpr (std::is_convertible_v<decltype(arg), T const&>) {
@@ -725,6 +818,12 @@ namespace rpnx
                 });
         }
 
+        /**
+         * @brief Retrieves the held value as `T&` with runtime type checking.
+         * @tparam T Expected held type.
+         * @return Mutable reference to the held value.
+         * @throws std::bad_variant_access If the active alternative is not @p T.
+         */
         template < typename T >
         T& get_as()
         {
@@ -740,6 +839,12 @@ namespace rpnx
             return *static_cast< T* >(m_data);
         }
 
+        /**
+         * @brief Alias of get_as().
+         * @tparam T Expected held type.
+         * @return Mutable reference to the held value.
+         * @throws std::bad_variant_access If the active alternative is not @p T.
+         */
         template < typename T >
         T& as()
         {
@@ -755,6 +860,12 @@ namespace rpnx
             return *static_cast< T* >(m_data);
         }
 
+        /**
+         * @brief Alias of get_as().
+         * @tparam T Expected held type.
+         * @return Mutable reference to the held value.
+         * @throws std::bad_variant_access If the active alternative is not @p T.
+         */
         template < typename T >
         T& unwrap()
         {
@@ -770,6 +881,12 @@ namespace rpnx
             return *static_cast< T* >(m_data);
         }
 
+        /**
+         * @brief Retrieves the held value as `T&` without runtime checks.
+         * @tparam T Expected held type.
+         * @return Mutable reference to the held value.
+         * @note Uses assertions in debug builds for validation.
+         */
         template < typename T >
         T& unwrap_unchecked()
         {
@@ -781,6 +898,12 @@ namespace rpnx
             return *static_cast< T* >(m_data);
         }
 
+        /**
+         * @brief Retrieves the held value as `T const&` without runtime checks.
+         * @tparam T Expected held type.
+         * @return Const reference to the held value.
+         * @note Uses assertions in debug builds for validation.
+         */
         template < typename T >
         T const& unwrap_unchecked() const
         {
@@ -792,6 +915,12 @@ namespace rpnx
             return *static_cast< T const* >(m_data);
         }
 
+        /**
+         * @brief Retrieves the held value as `T const&` with runtime type checking.
+         * @tparam T Expected held type.
+         * @return Const reference to the held value.
+         * @throws std::bad_variant_access If the active alternative is not @p T.
+         */
         template < typename T >
         T const& get_as() const
         {
@@ -809,6 +938,12 @@ namespace rpnx
             return *static_cast< T const* >(m_data);
         }
 
+        /**
+         * @brief Const alias of get_as().
+         * @tparam T Expected held type.
+         * @return Const reference to the held value.
+         * @throws std::bad_variant_access If the active alternative is not @p T.
+         */
         template < typename T >
         T const& as() const
         {
@@ -826,6 +961,12 @@ namespace rpnx
             return *static_cast< T const* >(m_data);
         }
 
+        /**
+         * @brief Const alias of get_as().
+         * @tparam T Expected held type.
+         * @return Const reference to the held value.
+         * @throws std::bad_variant_access If the active alternative is not @p T.
+         */
         template < typename T >
         T const& unwrap() const
         {
@@ -843,6 +984,12 @@ namespace rpnx
             return *static_cast< T const* >(m_data);
         }
 
+        /**
+         * @brief Retrieves the held value by alternative index with runtime checking.
+         * @tparam N Alternative index.
+         * @return Const reference to the held value.
+         * @throws std::bad_variant_access If the active index is not @p N.
+         */
         template < std::size_t N >
         auto const& get_n() const
         {
@@ -860,6 +1007,12 @@ namespace rpnx
             return *static_cast< typename std::tuple_element< N, std::tuple< Ts... > >::type const* >(m_data);
         }
 
+        /**
+         * @brief Retrieves the held value by alternative index without runtime checking.
+         * @tparam N Alternative index.
+         * @return Const reference to the held value.
+         * @note Uses assertions in debug builds for validation.
+         */
         template < std::size_t N >
         auto const& get_n_unchecked() const
         {
@@ -868,6 +1021,12 @@ namespace rpnx
             return *static_cast< typename std::tuple_element< N, std::tuple< Ts... > >::type const* >(m_data);
         }
 
+        /**
+         * @brief Equality comparison.
+         * @param other Variant to compare against.
+         * @return `true` if both active alternative and value are equal.
+         * @throws std::bad_variant_access If either variant is valueless.
+         */
         bool operator==(basic_variant< Allocator, Ts... > const& other) const
         {
             assert(valid());
@@ -883,6 +1042,12 @@ namespace rpnx
             return m_vinf->m_general_info.m_equals(m_data, other.m_data);
         }
 
+        /**
+         * @brief Inequality comparison.
+         * @param other Variant to compare against.
+         * @return `true` if variants are not equal.
+         * @throws std::bad_variant_access If either variant is valueless.
+         */
         bool operator!=(basic_variant< Allocator, Ts... > const& other) const
         {
             assert(valid());
@@ -890,6 +1055,12 @@ namespace rpnx
         }
 
       public:
+        /**
+         * @brief Strict-weak ordering comparison.
+         * @param other Variant to compare against.
+         * @return `true` if `*this` is ordered before @p other.
+         * @throws std::bad_variant_access If either variant is valueless.
+         */
         bool operator<(basic_variant< Allocator, Ts... > const& other) const
         {
             assert(valid());
@@ -906,6 +1077,12 @@ namespace rpnx
         }
 
       public:
+        /**
+         * @brief Three-way comparison.
+         * @param other Variant to compare against.
+         * @return Strong ordering result between the two variants.
+         * @throws std::bad_variant_access If either variant is valueless.
+         */
         std::strong_ordering operator<=>(basic_variant< Allocator, Ts... > const& other) const
         {
             assert(valid());
@@ -921,6 +1098,11 @@ namespace rpnx
             return m_vinf->m_general_info.m_three_way(m_data, other.m_data);
         }
 
+        /**
+         * @brief Checks whether the active alternative is exactly @p T.
+         * @tparam T Type to test.
+         * @return `true` if @p T is the active alternative.
+         */
         template < typename T >
         bool type_is() const
         {
@@ -929,6 +1111,11 @@ namespace rpnx
             return m_vinf != nullptr && m_vinf->m_index == index_of< T, Ts... >::value;
         }
 
+        /**
+         * @brief Checks whether the active alternative is any of @p Ts2.
+         * @tparam Ts2 Types to test.
+         * @return `true` if active type is in `Ts2...`.
+         */
         template < typename... Ts2 >
         bool type_any_of() const
         {
@@ -940,6 +1127,136 @@ namespace rpnx
             return (type_is< Ts2 >() || ...);
         }
 
+        /**
+         * @brief Applies a visitor to the active alternative.
+         * @tparam R Visitor return type.
+         * @tparam D Dispatch policy.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result.
+         */
+        template < typename R, dispatch_type D = dispatch_type::automatic, typename F >
+        R apply_visitor(F&& func) &
+        {
+            return rpnx::apply_visitor< R, D >(*this, std::forward< F >(func));
+        }
+
+        /**
+         * @brief Const lvalue overload of apply_visitor().
+         * @tparam R Visitor return type.
+         * @tparam D Dispatch policy.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result.
+         */
+        template < typename R, dispatch_type D = dispatch_type::automatic, typename F >
+        R apply_visitor(F&& func) const&
+        {
+            return rpnx::apply_visitor< R, D >(*this, std::forward< F >(func));
+        }
+
+        /**
+         * @brief Rvalue overload of apply_visitor().
+         * @tparam R Visitor return type.
+         * @tparam D Dispatch policy.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result.
+         */
+        template < typename R, dispatch_type D = dispatch_type::automatic, typename F >
+        R apply_visitor(F&& func) &&
+        {
+            return rpnx::apply_visitor< R, D >(std::move(*this), std::forward< F >(func));
+        }
+
+        /**
+         * @brief Applies a visitor and throws if not invocable for the active alternative.
+         * @tparam R Visitor return type.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result.
+         * @throws std::bad_variant_access If @p func cannot be called for the active type.
+         */
+        template < typename R, typename F >
+        R apply_visitor_checked(F&& func) &
+        {
+            return rpnx::apply_visitor_checked< R >(*this, std::forward< F >(func));
+        }
+
+        /**
+         * @brief Const lvalue overload of apply_visitor_checked().
+         * @tparam R Visitor return type.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result.
+         * @throws std::bad_variant_access If @p func cannot be called for the active type.
+         */
+        template < typename R, typename F >
+        R apply_visitor_checked(F&& func) const&
+        {
+            return rpnx::apply_visitor_checked< R >(*this, std::forward< F >(func));
+        }
+
+        /**
+         * @brief Rvalue overload of apply_visitor_checked().
+         * @tparam R Visitor return type.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result.
+         * @throws std::bad_variant_access If @p func cannot be called for the active type.
+         */
+        template < typename R, typename F >
+        R apply_visitor_checked(F&& func) &&
+        {
+            return rpnx::apply_visitor_checked< R >(std::move(*this), std::forward< F >(func));
+        }
+
+
+        /**
+         * @brief Applies a visitor and returns default `R{}` when not invocable for the active type.
+         * @tparam R Visitor return type.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result or default-constructed `R`.
+         */
+        template < typename R, typename F >
+        R try_apply_visitor(F&& func) &
+        {
+            return rpnx::try_apply_visitor< R >(*this, std::forward< F >(func));
+        }
+
+        /**
+         * @brief Const lvalue overload of try_apply_visitor().
+         * @tparam R Visitor return type.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result or default-constructed `R`.
+         */
+        template < typename R, typename F >
+        R try_apply_visitor(F&& func) const&
+        {
+            return rpnx::try_apply_visitor< R >(*this, std::forward< F >(func));
+        }
+
+        /**
+         * @brief Rvalue overload of try_apply_visitor().
+         * @tparam R Visitor return type.
+         * @tparam F Visitor type.
+         * @param func Visitor callable.
+         * @return Visitor result or default-constructed `R`.
+         */
+        template < typename R, typename F >
+        R try_apply_visitor(F&& func) &&
+        {
+            return rpnx::try_apply_visitor< R >(std::move(*this), std::forward< F >(func));
+        }
+        /**
+         * @brief Invokes @p func with the held value if it is of type @p T.
+         * @tparam T Type to match.
+         * @tparam F Callable type.
+         * @param func Callable invoked on match.
+         * @return `true` if the type matched and callable was invoked.
+         */
         template < typename T, typename F >
         bool match(F&& func)
         {
@@ -951,6 +1268,13 @@ namespace rpnx
 
             return false;
         }
+        /**
+         * @brief Invokes @p func with the held value if it is of type @p T and returns predicate result.
+         * @tparam T Type to test.
+         * @tparam F Callable type.
+         * @param func Predicate callable.
+         * @return Predicate result on match, otherwise `false`.
+         */
         template < typename T, typename F >
         bool test(F&& func)
         {
@@ -961,6 +1285,13 @@ namespace rpnx
             return false;
         }
 
+        /**
+         * @brief Const overload of match().
+         * @tparam T Type to match.
+         * @tparam F Callable type.
+         * @param func Callable invoked on match.
+         * @return `true` if the type matched and callable was invoked.
+         */
         template < typename T, typename F >
         bool match(F&& func) const
         {
@@ -973,6 +1304,13 @@ namespace rpnx
             return false;
         }
 
+        /**
+         * @brief Const overload of test().
+         * @tparam T Type to test.
+         * @tparam F Callable type.
+         * @param func Predicate callable.
+         * @return Predicate result on match, otherwise `false`.
+         */
         template < typename T, typename F >
         bool test(F&& func) const
         {
@@ -984,6 +1322,11 @@ namespace rpnx
             return false;
         }
 
+        /**
+         * @brief Returns pointer to held value if active type is @p T.
+         * @tparam T Type to retrieve.
+         * @return Pointer to held value, or `nullptr` if type does not match.
+         */
         template < typename T >
         T* cast_ptr()
         {
@@ -995,6 +1338,11 @@ namespace rpnx
             return static_cast< T* >(m_data);
         }
 
+        /**
+         * @brief Const overload of cast_ptr().
+         * @tparam T Type to retrieve.
+         * @return Pointer to held value, or `nullptr` if type does not match.
+         */
         template < typename T >
         T const* cast_ptr() const
         {
@@ -1006,6 +1354,11 @@ namespace rpnx
             return static_cast< T const* >(m_data);
         }
 
+        /**
+         * @brief Returns RTTI for the active alternative.
+         * @return Reference to `std::type_info` for the active type.
+         * @throws std::bad_variant_access If the variant is valueless.
+         */
         std::type_info const& type() const
         {
             assert(valid());
@@ -1016,12 +1369,23 @@ namespace rpnx
             return *m_vinf->m_general_info.m_type_info;
         }
 
+        /**
+         * @brief Returns `std::type_index` for the active alternative.
+         * @return Type index of active alternative.
+         * @throws std::bad_variant_access If the variant is valueless.
+         */
         std::type_index type_index() const
         {
             assert(valid());
             return std::type_index(type());
         }
 
+        /**
+         * @brief Retrieves the held value by alternative index with runtime checking.
+         * @tparam N Alternative index.
+         * @return Mutable reference to the held value.
+         * @throws std::bad_variant_access If the active index is not @p N.
+         */
         template < std::size_t N >
         auto& get_n()
         {
@@ -1034,6 +1398,12 @@ namespace rpnx
             return *static_cast< std::tuple_element_t< N, std::tuple< Ts... > >* >(m_data);
         }
 
+        /**
+         * @brief Retrieves the held value by alternative index without runtime checking.
+         * @tparam N Alternative index.
+         * @return Mutable reference to the held value.
+         * @note Uses assertions in debug builds for validation.
+         */
         template < std::size_t N >
         auto& get_n_unchecked()
         {
@@ -1042,6 +1412,11 @@ namespace rpnx
             return *static_cast< std::tuple_element_t< N, std::tuple< Ts... > >* >(m_data);
         }
 
+        /**
+         * @brief Returns the active alternative index.
+         * @return Zero-based index into `Ts...`.
+         * @throws std::bad_variant_access If the variant is valueless.
+         */
         std::size_t index() const
         {
             assert(valid());
@@ -1053,6 +1428,12 @@ namespace rpnx
         }
 
       private:
+        /**
+         * @brief Finds the first index where `remove_cvref_t<T>` exactly matches an alternative.
+         * @tparam T Type to inspect.
+         * @tparam N Starting index.
+         * @return Matching index, or `sizeof...(Ts)` if not found.
+         */
         template < typename T, std::size_t N >
         static consteval std::size_t cvref_removed_identical_index()
         {
@@ -1073,6 +1454,11 @@ namespace rpnx
             }
         }
 
+        /**
+         * @brief Resolves which alternative index should be used for construction from @p T.
+         * @tparam T Source type.
+         * @return Index of exact match (if convertible) or first convertible alternative.
+         */
         template < typename T >
         static constexpr std::size_t constructor_index()
         {
@@ -1091,6 +1477,12 @@ namespace rpnx
             }
         }
 
+        /**
+         * @brief Finds the first alternative index constructible from @p T.
+         * @tparam T Source type.
+         * @tparam N Starting index.
+         * @return Index of the first convertible alternative.
+         */
         template < typename T, std::size_t N >
         static constexpr std::size_t convertible_index()
         {

@@ -126,6 +126,21 @@ TEST(variant, visitors)
     });
     ASSERT_EQ(result, 42);
 
+    int member_result = v.apply_visitor<int>([](auto&& arg) -> int {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, int>) return arg + 1;
+        else return 0;
+    });
+    ASSERT_EQ(member_result, 43);
+
+    rpnx::variant<int, std::string> cv(std::string("hello"));
+    std::size_t member_const_result = cv.apply_visitor<std::size_t>([](auto&& arg) -> std::size_t {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, std::string>) return arg.size();
+        else return 0;
+    });
+    ASSERT_EQ(member_const_result, 5);
+
     bool matched = v.match<int>([](int val) {
         ASSERT_EQ(val, 42);
     });
@@ -217,10 +232,15 @@ TEST(variant, visitor_exceptions)
     // apply_visitor_checked with missing overload
     // v contains int, and int_only_visitor HAS int overload, so it should NOT throw
     ASSERT_NO_THROW(rpnx::apply_visitor_checked<void>(v, int_only_visitor{}));
+    ASSERT_NO_THROW(v.apply_visitor_checked<void>(int_only_visitor{}));
 
     v = std::string("hello");
     // v contains string, and int_only_visitor LACKS string overload, so it SHOULD throw
     ASSERT_THROW(rpnx::apply_visitor_checked<void>(v, int_only_visitor{}), std::bad_variant_access);
+    ASSERT_THROW(v.apply_visitor_checked<void>(int_only_visitor{}), std::bad_variant_access);
+
+    int member_try = v.try_apply_visitor<int>([](int x) { return x + 1; });
+    ASSERT_EQ(member_try, 0);
 }
 
 TEST(variant, checked_visitor_exception)
