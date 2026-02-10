@@ -5,7 +5,7 @@ project(RPNXDataStructures LANGUAGES CXX)
 
 include(GNUInstallDirs)
 set(BUILD_TESTING ON CACHE BOOL "Build tests for RPNXDataStructures")
-#include(CTest)
+include(CTest)
 
 add_library(rpnx_datastructures INTERFACE
         include/rpnx/segmented_dynar.hpp
