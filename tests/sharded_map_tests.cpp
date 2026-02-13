@@ -65,3 +65,47 @@ TEST(conc_sharded_unordered_map, concurrent_access)
         }
     }
 }
+
+TEST(conc_sharded_unordered_map, exclusive_range)
+{
+    rpnx::conc_sharded_unordered_map<int, int> map(4);
+    for (int i = 0; i < 100; ++i)
+    {
+        map.put(i, i * 2);
+    }
+
+    int count = 0;
+    for (auto const& [key, value] : map.range_exclusive())
+    {
+        EXPECT_EQ(value, key * 2);
+        count++;
+    }
+    EXPECT_EQ(count, 100);
+
+    const auto& cmap = map;
+    count = 0;
+    for (auto const& [key, value] : cmap.range_exclusive())
+    {
+        EXPECT_EQ(value, key * 2);
+        count++;
+    }
+    EXPECT_EQ(count, 100);
+}
+
+TEST(conc_sharded_unordered_map, size)
+{
+    rpnx::conc_sharded_unordered_map<int, int> map(4);
+
+    // Because no other thread is concurrently modifying this map, estimate_size is guaranteed to
+    // return the actual size.
+    EXPECT_EQ(map.estimate_size(), 0);
+    EXPECT_EQ(map.size_exclusive(), 0);
+
+    for (int i = 0; i < 100; ++i)
+    {
+        map.put(i, i);
+    }
+
+    EXPECT_EQ(map.estimate_size(), 100);
+    EXPECT_EQ(map.size_exclusive(), 100);
+}
