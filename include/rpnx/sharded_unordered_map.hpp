@@ -278,6 +278,32 @@ namespace rpnx
             }
         }
 
+        template <typename Func>
+        Value& get_or_init_iter(Key const& key, Func func)
+        {
+            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            shard& target_shard = m_shards[shard_index];
+            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            if (auto it = target_shard.m_map.find(key); it != target_shard.m_map.end())
+            {
+                return it->second;
+            }
+            else
+            {
+                try
+                {
+                    auto& val = target_shard.m_map.insert(key);
+                    func(val.first, val.second);
+                    return val;
+                }
+                catch (...)
+                {
+                    target_shard.m_map.erase(key);
+                    throw;
+                }
+            }
+        }
+
         bool try_put(Key const& key, Value value)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
