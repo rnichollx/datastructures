@@ -279,7 +279,7 @@ namespace rpnx
         }
 
         template <typename Func>
-        Value& get_or_init_iter(Key const& key, Func func)
+        Value& get_or_init_iter(Key const & key, Func func)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
@@ -292,9 +292,9 @@ namespace rpnx
             {
                 try
                 {
-                    auto& val = target_shard.m_map.insert(key);
-                    func(val.first, val.second);
-                    return val;
+                    auto val = target_shard.m_map.emplace(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
+                    func(val.first->first, val.first->second);
+                    return val.first->second;
                 }
                 catch (...)
                 {
