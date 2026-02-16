@@ -92,6 +92,44 @@ namespace rpnx
             }
         }
 
+        template < typename Function >
+        static R free_call_impl(function< R(Args...) >* f, Args... args)
+        {
+            return Function(args...);
+        }
+
+
+        template < typename Function >
+        static void free_copy_ctor_impl(function< R(Args...) >* self, function< R(Args...) > const* other)
+        {
+            self->m_impl_tbl = &free_vtbl< Function >;
+            self->m_callable = &free_call_impl< Function >;
+        }
+
+        template < typename Function >
+        static void free_copy_assign_impl(function< R(Args...) >* self, function< R(Args...) > const* other)
+        {
+            self->m_impl_tbl->m_destroy(self);
+            self->m_impl_tbl = &free_vtbl< Function >;
+            self->m_callable = &free_call_impl< Function >;
+        }
+
+        template < typename Function >
+        static void free_move_ctor_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
+        {
+            self->m_impl_tbl = &free_vtbl< Function >;
+            self->m_callable = &free_call_impl< Function >;
+        }
+
+        template < typename Function >
+       static void free_move_assign_impl(function< R(Args...) >* self, function< R(Args...) > * other)
+        {
+            self->m_impl_tbl->m_destroy(self);
+            self->m_impl_tbl = &free_vtbl< Function >;
+            self->m_callable = &free_call_impl< Function >;
+        }
+
+
         template < typename Functor >
         static void copy_ctor_impl(function< R(Args...) >* self, function< R(Args...) > const* other)
         {
@@ -289,6 +327,15 @@ namespace rpnx
 
         template < typename Functor >
         static constexpr impl_tbl const vtbl = make_impl_tbl< Functor >();
+        template < typename Function >
+        static constexpr impl_tbl const free_vtbl = { .m_copy_ctor = &free_copy_ctor_impl<Function>,
+                .m_copy_assign = &free_copy_assign_impl<Function>,
+                .m_move_ctor = &free_move_ctor_impl<Function>,
+                .m_move_assign = &free_move_assign_impl<Function>,
+                .m_reset = &null_reset_impl,
+                .m_destroy = &null_destroy_impl,
+                .m_call = &free_call_impl<Function> };
+
         static constexpr impl_tbl const void_vtbl = make_null_impl_tbl();
 
       public:
