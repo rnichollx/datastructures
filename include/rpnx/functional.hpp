@@ -279,12 +279,12 @@ namespace rpnx
         template < typename Functor >
         static constexpr impl_tbl make_impl_tbl()
         {
-            return {.m_copy_assign = &copy_assign_impl< Functor >, .m_copy_ctor = &copy_ctor_impl< Functor >, .m_move_assign = &move_assign_impl< Functor >, .m_move_ctor = &move_ctor_impl< Functor >, .m_destroy = &destroy_impl< Functor >, .m_call = &call_impl< Functor >, .m_reset = &reset_impl< Functor >};
+            return { .m_copy_ctor = &copy_ctor_impl< Functor >, .m_copy_assign = &copy_assign_impl< Functor >, .m_move_ctor = &move_ctor_impl< Functor >, .m_move_assign = &move_assign_impl< Functor >,.m_reset = &reset_impl< Functor >, .m_destroy = &destroy_impl< Functor >, .m_call = &call_impl< Functor >};
         }
 
         static constexpr impl_tbl make_null_impl_tbl()
         {
-            return {.m_copy_ctor = &null_copy_ctor_impl, .m_copy_assign = &null_copy_assign_impl,.m_move_ctor = &null_move_ctor_impl, .m_move_assign = &null_move_assign_impl, .m_destroy = &null_destroy_impl, .m_call = &null_call_impl, .m_reset = &null_reset_impl};
+            return {.m_copy_ctor = &null_copy_ctor_impl, .m_copy_assign = &null_copy_assign_impl,.m_move_ctor = &null_move_ctor_impl, .m_move_assign = &null_move_assign_impl,  .m_reset = &null_reset_impl, .m_destroy = &null_destroy_impl, .m_call = &null_call_impl,};
         }
 
         template < typename Functor >
