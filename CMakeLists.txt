@@ -12,6 +12,8 @@ add_library(rpnx_datastructures INTERFACE
         include/rpnx/sharded_unordered_map.hpp
         include/rpnx/iterator.hpp
         include/rpnx/variant.hpp
+        include/rpnx/functional.hpp
+        include/rpnx/memory.hpp
 )
 
 
@@ -54,6 +56,7 @@ if (BUILD_TESTING)
             tests/sharded_map_tests.cpp
             tests/iterator_tests.cpp
             tests/variant_tests.cpp
+            tests/function_tests.cpp
     )
     target_link_libraries(rpnx_datastructures_tests PRIVATE rpnx_datastructures GTest::gtest_main GTest::gtest)
     gtest_discover_tests(rpnx_datastructures_tests)
