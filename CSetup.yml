@@ -1,5 +1,5 @@
 default_configuration:
-    depends: [ googletest ] # , metalib ]
+    depends: [ googletest, benchmark ] # , metalib ]
     project_type: CMake
     cmake_package_name: RPNXDataStructures
 suggested_dep_sources:
@@ -9,3 +9,6 @@ suggested_dep_sources:
 #    metalib:
 #        git:
 #            repository: "https://gitlab.com/rpnx/metalib.git"
+    benchmark:
+        git:
+            repository: "https://github.com/rnichollx/google-benchmark.git"

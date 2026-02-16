@@ -7,6 +7,8 @@ include(GNUInstallDirs)
 set(BUILD_TESTING ON CACHE BOOL "Build tests for RPNXDataStructures")
 include(CTest)
 
+
+
 add_library(rpnx_datastructures INTERFACE
         include/rpnx/segmented_dynar.hpp
         include/rpnx/sharded_unordered_map.hpp
@@ -57,7 +59,14 @@ if (BUILD_TESTING)
             tests/iterator_tests.cpp
             tests/variant_tests.cpp
             tests/function_tests.cpp
+            tests/test_utils_tests.cpp
+            tests/test_utils.hpp
     )
     target_link_libraries(rpnx_datastructures_tests PRIVATE rpnx_datastructures GTest::gtest_main GTest::gtest)
     gtest_discover_tests(rpnx_datastructures_tests)
+    find_package(benchmark REQUIRED)
+    add_executable(rpnx_datastructures_benchmarks
+        benchmarks/function.cpp
+    )
+    target_link_libraries(rpnx_datastructures_benchmarks PRIVATE rpnx_datastructures benchmark::benchmark benchmark::benchmark_main)
 endif()

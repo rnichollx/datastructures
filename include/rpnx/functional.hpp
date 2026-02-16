@@ -42,9 +42,12 @@ namespace rpnx
 
         static std::size_t constexpr sbo_size = 16;
         static std::size_t constexpr sbo_align = 16;
-        alignas(sbo_align) std::array< std::byte, sbo_size > m_storage;
+
         callable_f m_callable;
         impl_tbl const* m_impl_tbl;
+        alignas(sbo_align) std::array< std::byte, sbo_size > m_storage;
+
+
 
         template < typename Functor >
         static constexpr bool use_sbo()
@@ -64,13 +67,13 @@ namespace rpnx
         {
             if constexpr (use_sbo< Functor >())
             {
-                return std::launder<Functor>(reinterpret_cast< Functor* >(f->m_storage.data()));
+                return std::launder< Functor >(reinterpret_cast< Functor* >(f->m_storage.data()));
             }
             else
             {
                 static_assert(alignof(Functor*) <= sbo_align, "Functor pointer must fit in storage for non-SBO case");
                 static_assert(sizeof(Functor*) <= sbo_size, "Functor pointer must fit in storage for non-SBO case");
-                return std::launder<Functor>(*reinterpret_cast< Functor** >(f->m_storage.data()));
+                return std::launder< Functor >(*reinterpret_cast< Functor** >(f->m_storage.data()));
             }
         }
 
@@ -79,13 +82,13 @@ namespace rpnx
         {
             if constexpr (use_sbo< Functor >())
             {
-                return std::launder<Functor const >(reinterpret_cast< Functor const* >(f->m_storage.data()));
+                return std::launder< Functor const >(reinterpret_cast< Functor const* >(f->m_storage.data()));
             }
             else
             {
                 static_assert(alignof(Functor*) <= sbo_align, "Functor pointer must fit in storage for non-SBO case");
                 static_assert(sizeof(Functor*) <= sbo_size, "Functor pointer must fit in storage for non-SBO case");
-                return std::launder<Functor const>(*reinterpret_cast< Functor* const*  >(f->m_storage.data()));
+                return std::launder< Functor const >(*reinterpret_cast< Functor* const* >(f->m_storage.data()));
             }
         }
 
@@ -95,7 +98,7 @@ namespace rpnx
             if constexpr (use_sbo< Functor >())
             {
                 Functor* self_ptr = std::launder< Functor >(get_storage_address< Functor >(self));
-                const Functor* other_ptr = std::launder< Functor >(get_storage_address< Functor >(other));
+                const Functor* other_ptr = std::launder< Functor const >(get_storage_address< Functor >(other));
                 new (self_ptr) Functor(*other_ptr);
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = &call_impl< Functor >;
@@ -117,7 +120,7 @@ namespace rpnx
                     delete reinterpret_cast< std::aligned_storage_t< sizeof(Functor), alignof(Functor) >* >(new_functor);
                     throw;
                 }
-                new ((void*)self->m_storage.data()) Functor*(std::launder<Functor>((Functor*)new_functor));
+                new ((void*)self->m_storage.data()) Functor*(std::launder< Functor >((Functor*)new_functor));
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = &call_impl< Functor >;
             }
@@ -128,8 +131,8 @@ namespace rpnx
         {
             if constexpr (use_sbo< Functor >())
             {
-                Functor* self_ptr = std::launder< Functor* >(get_storage_address< Functor >(self));
-                const Functor* other_ptr = std::launder< Functor* >(get_storage_address< Functor >(other));
+                Functor* self_ptr = std::launder< Functor >(get_storage_address< Functor >(self));
+                const Functor* other_ptr = std::launder< Functor const >(get_storage_address< Functor >(other));
                 new (self_ptr) Functor(std::move(*other_ptr));
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = &call_impl< Functor >;
@@ -137,11 +140,11 @@ namespace rpnx
             else
             {
                 // For move-ctor, just steal the contents
-                Functor* other_ptr = std::launder< Functor* >(get_storage_address< Functor >(other));
+                Functor* other_ptr = std::launder< Functor >(get_storage_address< Functor >(other));
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = &call_impl< Functor >;
                 new ((void*)self->m_storage.data()) Functor*(other_ptr);
-                *std::launder(reinterpret_cast< Functor** >(other->m_storage)) = nullptr;
+                *std::launder(reinterpret_cast< Functor** >(other->m_storage.data())) = nullptr;
                 other->m_impl_tbl = &void_vtbl;
                 other->m_callable = &null_call_impl;
             }
@@ -184,14 +187,14 @@ namespace rpnx
                     throw;
                 }
                 self->m_impl_tbl->m_destroy(self);
-                new ((void*)self->m_storage.data()) Functor*(std::launder<Functor>((Functor*)new_functor));
+                new ((void*)self->m_storage.data()) Functor*(std::launder< Functor >((Functor*)new_functor));
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = vtbl< Functor >.m_call;
             }
         }
 
         template < typename Functor >
-        static void move_assign_impl(function< R(Args...) >* self, function< R(Args...) >* other)
+        static void move_assign_impl(function< R(Args...) >* self, function< R(Args...) >* other) noexcept
         {
             if (self == other)
             {
@@ -200,6 +203,7 @@ namespace rpnx
             self->m_impl_tbl->m_destroy(self);
             move_ctor_impl< Functor >(self, other);
         }
+
 
         template < typename Functor >
         static void destroy_impl(function< R(Args...) >* f) noexcept
@@ -221,7 +225,20 @@ namespace rpnx
             self->m_callable = &null_call_impl;
         }
 
+        static void null_move_ctor_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
+        {
+            self->m_impl_tbl = &void_vtbl;
+            self->m_callable = &null_call_impl;
+        }
+
         static void null_copy_assign_impl(function< R(Args...) >* self, function< R(Args...) > const* other) noexcept
+        {
+            self->m_impl_tbl->m_destroy(self);
+            self->m_impl_tbl = &void_vtbl;
+            self->m_callable = &null_call_impl;
+        }
+
+        static void null_move_assign_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
         {
             self->m_impl_tbl->m_destroy(self);
             self->m_impl_tbl = &void_vtbl;
@@ -262,22 +279,27 @@ namespace rpnx
         template < typename Functor >
         static constexpr impl_tbl make_impl_tbl()
         {
-            return {.m_copy_assign = &copy_assign_impl< Functor >, .m_copy_ctor = &copy_ctor_impl< Functor >, .m_destroy = &destroy_impl< Functor >, .m_call = &call_impl< Functor >, .m_reset = &reset_impl< Functor >};
+            return {.m_copy_assign = &copy_assign_impl< Functor >, .m_copy_ctor = &copy_ctor_impl< Functor >, .m_move_assign = &move_assign_impl< Functor >, .m_move_ctor = &move_ctor_impl< Functor >, .m_destroy = &destroy_impl< Functor >, .m_call = &call_impl< Functor >, .m_reset = &reset_impl< Functor >};
         }
 
         static constexpr impl_tbl make_null_impl_tbl()
         {
-            return {.m_copy_ctor = &null_copy_ctor_impl, .m_copy_assign = &null_copy_assign_impl, .m_destroy = &null_destroy_impl, .m_call = &null_call_impl, .m_reset = &null_reset_impl};
+            return {.m_copy_ctor = &null_copy_ctor_impl, .m_copy_assign = &null_copy_assign_impl,.m_move_ctor = &null_move_ctor_impl, .m_move_assign = &null_move_assign_impl, .m_destroy = &null_destroy_impl, .m_call = &null_call_impl, .m_reset = &null_reset_impl};
         }
 
         template < typename Functor >
-        static constexpr impl_tbl const vtbl = make_impl_tbl<Functor>();
+        static constexpr impl_tbl const vtbl = make_impl_tbl< Functor >();
         static constexpr impl_tbl const void_vtbl = make_null_impl_tbl();
 
       public:
         function() noexcept : m_callable(&null_call_impl), m_impl_tbl(&void_vtbl)
         {
             poison_region(reinterpret_cast< void* >(&m_storage), sizeof(m_storage));
+        }
+
+        ~function() noexcept
+        {
+            m_impl_tbl->m_destroy(this);
         }
 
         template < typename Functor, typename = std::enable_if_t< !std::is_same_v< std::decay_t< Functor >, function > > >
@@ -303,7 +325,7 @@ namespace rpnx
                     delete storage;
                     throw;
                 }
-                new ((void*)m_storage.data()) Decayed*(std::launder<Decayed>(reinterpret_cast<Decayed*>(storage)));
+                new ((void*)m_storage.data()) Decayed*(std::launder< Decayed >(reinterpret_cast< Decayed* >(storage)));
                 m_impl_tbl = &vtbl< Decayed >;
                 m_callable = &call_impl< Decayed >;
             }
@@ -322,11 +344,13 @@ namespace rpnx
         function& operator=(function const& other)
         {
             other.m_impl_tbl->m_copy_assign(this, &other);
+            return *this;
         }
 
         function& operator=(function&& other) noexcept
         {
             other.m_impl_tbl->m_move_assign(this, &other);
+            return *this;
         }
 
         operator bool() const noexcept
@@ -343,9 +367,9 @@ namespace rpnx
         {
             return m_callable == &null_call_impl;
         }
-
-
     };
+
+    static_assert(sizeof(rpnx::function<int(int)>) == 32);
 } // namespace rpnx
 
 #endif // RPNXDATASTRUCTURES_FUNCTIONAL_HPP
