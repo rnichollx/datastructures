@@ -92,21 +92,31 @@ namespace rpnx
             }
         }
 
-        template < typename Function >
+        template <auto& function_ref>
+        struct dispatch_for {
+            static constexpr auto& id = function_ref;
+        };
+
+        template <auto& function_ref>
+        auto make_dispatch_for(decltype(function_ref)&) -> dispatch_for<function_ref> {
+            return {};
+        }
+
+        template < auto& Function >
         static R free_call_impl(function< R(Args...) >* f, Args... args)
         {
             return Function(args...);
         }
 
 
-        template < typename Function >
+        template < auto& Function >
         static void free_copy_ctor_impl(function< R(Args...) >* self, function< R(Args...) > const* other)
         {
             self->m_impl_tbl = &free_vtbl< Function >;
             self->m_callable = &free_call_impl< Function >;
         }
 
-        template < typename Function >
+        template < auto& Function >
         static void free_copy_assign_impl(function< R(Args...) >* self, function< R(Args...) > const* other)
         {
             self->m_impl_tbl->m_destroy(self);
@@ -114,15 +124,15 @@ namespace rpnx
             self->m_callable = &free_call_impl< Function >;
         }
 
-        template < typename Function >
+        template < auto& Function >
         static void free_move_ctor_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
         {
             self->m_impl_tbl = &free_vtbl< Function >;
             self->m_callable = &free_call_impl< Function >;
         }
 
-        template < typename Function >
-       static void free_move_assign_impl(function< R(Args...) >* self, function< R(Args...) > * other)
+        template < auto& Function >
+       static void free_move_assign_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
         {
             self->m_impl_tbl->m_destroy(self);
             self->m_impl_tbl = &free_vtbl< Function >;
@@ -327,7 +337,7 @@ namespace rpnx
 
         template < typename Functor >
         static constexpr impl_tbl const vtbl = make_impl_tbl< Functor >();
-        template < typename Function >
+        template < auto& Function >
         static constexpr impl_tbl const free_vtbl = { .m_copy_ctor = &free_copy_ctor_impl<Function>,
                 .m_copy_assign = &free_copy_assign_impl<Function>,
                 .m_move_ctor = &free_move_ctor_impl<Function>,
@@ -349,11 +359,25 @@ namespace rpnx
             m_impl_tbl->m_destroy(this);
         }
 
+        template <auto& fn>
+struct function_tag
+        {
+            static constexpr auto& id = fn;
+        };
+
+        template <auto& fn>
+constexpr function_tag<fn> tag_of(decltype(fn)&) { return {}; }
+
+        // Optional convenience: accept a function lvalue reference and forward to tag_of
+
+
+
         template < typename Functor, typename = std::enable_if_t< !std::is_same_v< std::decay_t< Functor >, function > > >
         function(Functor&& f)
         {
             using Decayed = std::decay_t< Functor >;
             static_assert(std::is_invocable_r_v< R, Decayed, Args... >, "Functor must be invokable with the correct signature");
+
             if constexpr (use_sbo< Decayed >())
             {
                 new (get_storage_address< Decayed >(this)) Decayed(std::forward< Functor >(f));
