@@ -49,10 +49,11 @@ namespace rpnx
 
 
 
+
         template < typename Functor >
         static constexpr bool use_sbo()
         {
-            return sizeof(Functor) <= sizeof(decltype(m_storage)) && alignof(Functor) <= alignof(decltype(m_storage)) && std::is_nothrow_copy_constructible_v< Functor > && std::is_nothrow_copy_assignable_v< Functor >;
+            return sizeof(Functor) <= sbo_size && alignof(Functor) <= sbo_align && std::is_nothrow_copy_constructible_v< Functor > && std::is_nothrow_copy_assignable_v< Functor >;
         }
 
         /**
@@ -373,7 +374,7 @@ constexpr function_tag<fn> tag_of(decltype(fn)&) { return {}; }
 
 
         template < typename Functor, typename = std::enable_if_t< !std::is_same_v< std::decay_t< Functor >, function > > >
-        function(Functor&& f)
+        function(Functor&& f) noexcept(use_sbo< std::decay_t< Functor > >())
         {
             using Decayed = std::decay_t< Functor >;
             static_assert(std::is_invocable_r_v< R, Decayed, Args... >, "Functor must be invokable with the correct signature");
