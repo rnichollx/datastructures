@@ -12,6 +12,10 @@
 
 namespace rpnx
 {
+    /**
+     * rpnx::function is intended as a faster version of std::function, although it currently lacks allocator support and some other functions.
+     * @tparam F The function signature, e.g. R(Args...)
+     */
     template < typename F >
     class function;
 
@@ -46,9 +50,6 @@ namespace rpnx
         callable_f m_callable;
         impl_tbl const* m_impl_tbl;
         alignas(sbo_align) std::array< std::byte, sbo_size > m_storage;
-
-
-
 
         template < typename Functor >
         static constexpr bool use_sbo()
@@ -93,13 +94,15 @@ namespace rpnx
             }
         }
 
-        template <auto& function_ref>
-        struct dispatch_for {
+        template < auto& function_ref >
+        struct dispatch_for
+        {
             static constexpr auto& id = function_ref;
         };
 
-        template <auto& function_ref>
-        auto make_dispatch_for(decltype(function_ref)&) -> dispatch_for<function_ref> {
+        template < auto& function_ref >
+        auto make_dispatch_for(decltype(function_ref)&) -> dispatch_for< function_ref >
+        {
             return {};
         }
 
@@ -108,7 +111,6 @@ namespace rpnx
         {
             return Function(args...);
         }
-
 
         template < auto& Function >
         static void free_copy_ctor_impl(function< R(Args...) >* self, function< R(Args...) > const* other)
@@ -126,20 +128,19 @@ namespace rpnx
         }
 
         template < auto& Function >
-        static void free_move_ctor_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
+        static void free_move_ctor_impl(function< R(Args...) >* self, function< R(Args...) >* other) noexcept
         {
             self->m_impl_tbl = &free_vtbl< Function >;
             self->m_callable = &free_call_impl< Function >;
         }
 
         template < auto& Function >
-       static void free_move_assign_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
+        static void free_move_assign_impl(function< R(Args...) >* self, function< R(Args...) >* other) noexcept
         {
             self->m_impl_tbl->m_destroy(self);
             self->m_impl_tbl = &free_vtbl< Function >;
             self->m_callable = &free_call_impl< Function >;
         }
-
 
         template < typename Functor >
         static void copy_ctor_impl(function< R(Args...) >* self, function< R(Args...) > const* other)
@@ -253,7 +254,6 @@ namespace rpnx
             move_ctor_impl< Functor >(self, other);
         }
 
-
         template < typename Functor >
         static void destroy_impl(function< R(Args...) >* f) noexcept
         {
@@ -274,7 +274,7 @@ namespace rpnx
             self->m_callable = &null_call_impl;
         }
 
-        static void null_move_ctor_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
+        static void null_move_ctor_impl(function< R(Args...) >* self, function< R(Args...) >* other) noexcept
         {
             self->m_impl_tbl = &void_vtbl;
             self->m_callable = &null_call_impl;
@@ -287,7 +287,7 @@ namespace rpnx
             self->m_callable = &null_call_impl;
         }
 
-        static void null_move_assign_impl(function< R(Args...) >* self, function< R(Args...) > * other) noexcept
+        static void null_move_assign_impl(function< R(Args...) >* self, function< R(Args...) >* other) noexcept
         {
             self->m_impl_tbl->m_destroy(self);
             self->m_impl_tbl = &void_vtbl;
@@ -328,12 +328,20 @@ namespace rpnx
         template < typename Functor >
         static constexpr impl_tbl make_impl_tbl()
         {
-            return { .m_copy_ctor = &copy_ctor_impl< Functor >, .m_copy_assign = &copy_assign_impl< Functor >, .m_move_ctor = &move_ctor_impl< Functor >, .m_move_assign = &move_assign_impl< Functor >,.m_reset = &reset_impl< Functor >, .m_destroy = &destroy_impl< Functor >, .m_call = &call_impl< Functor >};
+            return {.m_copy_ctor = &copy_ctor_impl< Functor >, .m_copy_assign = &copy_assign_impl< Functor >, .m_move_ctor = &move_ctor_impl< Functor >, .m_move_assign = &move_assign_impl< Functor >, .m_reset = &reset_impl< Functor >, .m_destroy = &destroy_impl< Functor >, .m_call = &call_impl< Functor >};
         }
 
         static constexpr impl_tbl make_null_impl_tbl()
         {
-            return {.m_copy_ctor = &null_copy_ctor_impl, .m_copy_assign = &null_copy_assign_impl,.m_move_ctor = &null_move_ctor_impl, .m_move_assign = &null_move_assign_impl,  .m_reset = &null_reset_impl, .m_destroy = &null_destroy_impl, .m_call = &null_call_impl,};
+            return {
+                .m_copy_ctor = &null_copy_ctor_impl,
+                .m_copy_assign = &null_copy_assign_impl,
+                .m_move_ctor = &null_move_ctor_impl,
+                .m_move_assign = &null_move_assign_impl,
+                .m_reset = &null_reset_impl,
+                .m_destroy = &null_destroy_impl,
+                .m_call = &null_call_impl,
+            };
         }
 
         template < typename Functor >
@@ -360,18 +368,19 @@ namespace rpnx
             m_impl_tbl->m_destroy(this);
         }
 
-        template <auto& fn>
-struct function_tag
+        template < auto& fn >
+        struct function_tag
         {
             static constexpr auto& id = fn;
         };
 
-        template <auto& fn>
-constexpr function_tag<fn> tag_of(decltype(fn)&) { return {}; }
+        template < auto& fn >
+        constexpr function_tag< fn > tag_of(decltype(fn)&)
+        {
+            return {};
+        }
 
         // Optional convenience: accept a function lvalue reference and forward to tag_of
-
-
 
         template < typename Functor, typename = std::enable_if_t< !std::is_same_v< std::decay_t< Functor >, function > > >
         function(Functor&& f) noexcept(use_sbo< std::decay_t< Functor > >())
@@ -441,7 +450,7 @@ constexpr function_tag<fn> tag_of(decltype(fn)&) { return {}; }
         }
     };
 
-    static_assert(sizeof(rpnx::function<int(int)>) == 32);
+    static_assert(sizeof(rpnx::function< int(int) >) == 32);
 } // namespace rpnx
 
 #endif // RPNXDATASTRUCTURES_FUNCTIONAL_HPP
