@@ -59,6 +59,7 @@ if (BUILD_TESTING)
             tests/iterator_tests.cpp
             tests/variant_tests.cpp
             tests/function_tests.cpp
+            tests/result_tests.cpp
             tests/test_utils_tests.cpp
             tests/test_utils.hpp
     )
