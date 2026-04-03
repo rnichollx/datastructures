@@ -9,6 +9,7 @@
 #include <cstring>
 #include <type_traits>
 #include <utility>
+#include <memory>
 
 namespace rpnx
 {
@@ -424,12 +425,20 @@ namespace rpnx
 
         function& operator=(function const& other)
         {
+            if (this == &other)
+            {
+                return *this;
+            }
             other.m_impl_tbl->m_copy_assign(this, &other);
             return *this;
         }
 
         function& operator=(function&& other) noexcept
         {
+            if (this == &other)
+            {
+                return *this;
+            }
             other.m_impl_tbl->m_move_assign(this, &other);
             return *this;
         }
