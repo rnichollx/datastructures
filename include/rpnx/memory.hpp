@@ -3,6 +3,8 @@
 #ifndef RPNXDATASTRUCTURES_MEMORY_HPP
 #define RPNXDATASTRUCTURES_MEMORY_HPP
 
+#include <cstddef>
+
 namespace rpnx
 {
     inline void poison_region(void* ptr, std::size_t size)
