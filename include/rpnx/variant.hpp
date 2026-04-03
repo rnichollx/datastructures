@@ -547,7 +547,7 @@ namespace rpnx
          * @brief Move-constructs from another variant of the same type.
          * @param other Source variant to move from.
          */
-        constexpr basic_variant(basic_variant< Allocator, Ts... >&& other) : m_alloc(std::move(other.m_alloc))
+        constexpr basic_variant(basic_variant< Allocator, Ts... >&& other) noexcept(std::is_nothrow_move_constructible_v<Allocator>) : m_alloc(std::move(other.m_alloc))
         {
             assert((m_vinf == nullptr) == (m_data == nullptr));
 
@@ -661,31 +661,31 @@ namespace rpnx
          * @throws Any exception thrown by allocation or construction of the selected alternative.
          */
         template < typename T2 >
-        constexpr basic_variant(T2 const& value, const allocator_type& alloc = allocator_type(), std::enable_if_t< rpnx::basic_variant< Allocator, Ts... >::can_construct_subtype_with< T2 >(), int > = 0) : m_alloc(alloc)
+        constexpr basic_variant(T2&& value, const allocator_type& alloc = allocator_type(), std::enable_if_t< rpnx::basic_variant< Allocator, Ts... >::can_construct_subtype_with< T2 >(), int > = 0) : m_alloc(alloc)
         {
-
             constexpr std::size_t index = constructor_index< T2 >();
-            using rebound_alloc_type = typename std::allocator_traits< allocator_type >::template rebind_alloc< T2 >;
-            rebound_alloc_type rebound_alloc(alloc);
+            using selected_type = std::tuple_element_t< index, std::tuple< Ts... > >;
+            using rebound_alloc_type = typename std::allocator_traits< allocator_type >::template rebind_alloc< selected_type >;
+            rebound_alloc_type rebound_alloc(m_alloc);
 
             m_vinf = &s_v_info_for< index >;
             assert(m_vinf->m_index == index);
             assert(m_vinf->m_index < (std::tuple_size_v< std::tuple< Ts... > >));
             try
             {
-                // Rebind allocator to allocate memory for type T2
+                // Rebind allocator to allocate memory for the selected alternative type.
                 // Rebound allocator
                 m_data = std::allocator_traits< rebound_alloc_type >::allocate(rebound_alloc,
-                                                                               1); // Allocate memory for type T2
+                                                                               1); // Allocate memory for the selected alternative.
 
                 // Construct the value in the allocated memory
-                std::allocator_traits< rebound_alloc_type >::construct(rebound_alloc, static_cast< T2* >(m_data), value);
+                std::allocator_traits< rebound_alloc_type >::construct(rebound_alloc, static_cast< selected_type* >(m_data), std::forward< T2 >(value));
             }
             catch (...)
             {
                 if (m_data != nullptr)
                 {
-                    rebound_alloc.deallocate(static_cast< T2* >(m_data), 1);
+                    std::allocator_traits< rebound_alloc_type >::deallocate(rebound_alloc, static_cast< selected_type* >(m_data), 1);
                 }
                 m_vinf = nullptr;
 
@@ -701,10 +701,9 @@ namespace rpnx
          * @return Reference to `*this`.
          * @throws Any exception thrown by allocation or construction of the new value.
          */
-        template < typename T >
-        constexpr basic_variant< Allocator, Ts... >& operator=(T const& value)
+        template < typename T, std::enable_if_t< can_construct_subtype_with< T >(), int > = 0 >
+        constexpr basic_variant< Allocator, Ts... >& operator=(T&& value)
         {
-            static_assert(can_construct_subtype_with< T >());
             assert((m_vinf == nullptr) == (m_data == nullptr));
 
             if (m_vinf != nullptr)
@@ -718,24 +717,25 @@ namespace rpnx
             m_data = nullptr;
 
             constexpr std::size_t index = constructor_index< T >();
+            using selected_type = std::tuple_element_t< index, std::tuple< Ts... > >;
             m_vinf = &s_v_info_for< index >;
             assert(m_vinf->m_index == index);
             assert(m_vinf->m_index < (std::tuple_size_v< std::tuple< Ts... > >));
 
-            // Rebind allocator to allocate memory for type T
-            using rebound_alloc_type = typename std::allocator_traits< allocator_type >::template rebind_alloc< T >;
+            // Rebind allocator to allocate memory for the selected alternative type.
+            using rebound_alloc_type = typename std::allocator_traits< allocator_type >::template rebind_alloc< selected_type >;
             rebound_alloc_type value_alloc(m_alloc); // Rebound allocator
             try
             {
-                m_data = value_alloc.allocate(1); // Allocate memory for type T
+                m_data = value_alloc.allocate(1); // Allocate memory for the selected alternative type
                 // Construct the value in the allocated memory
-                std::allocator_traits< rebound_alloc_type >::construct(value_alloc, static_cast< T* >(m_data), value);
+                std::allocator_traits< rebound_alloc_type >::construct(value_alloc, static_cast< selected_type* >(m_data), std::forward< T >(value));
             }
             catch (...)
             {
                 if (m_data != nullptr)
                 {
-                    std::allocator_traits< rebound_alloc_type >::deallocate(value_alloc, static_cast< T* >(m_data), 1);
+                    std::allocator_traits< rebound_alloc_type >::deallocate(value_alloc, static_cast< selected_type* >(m_data), 1);
                 }
                 m_vinf = nullptr;
 
@@ -1467,9 +1467,17 @@ namespace rpnx
             // If T is the same as any of the types in Ts..., return the index of the first match assuming it is convertible
             // otherwise, return the index of the first type in Ts... that T is convertible to
 
-            if constexpr (has_cvref_removed_identical_type< T >() && std::is_convertible_v< T, std::tuple_element_t< cvref_removed_identical_index< T, 0 >(), std::tuple< Ts... > > >)
+            if constexpr (has_cvref_removed_identical_type< T >())
             {
-                return cvref_removed_identical_index< T, 0 >();
+                constexpr auto exact_index = cvref_removed_identical_index< T, 0 >();
+                if constexpr (std::is_convertible_v< T, std::tuple_element_t< exact_index, std::tuple< Ts... > > >)
+                {
+                    return exact_index;
+                }
+                else
+                {
+                    return convertible_index< T, 0 >();
+                }
             }
             else
             {
