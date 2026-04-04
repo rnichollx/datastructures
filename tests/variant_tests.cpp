@@ -177,6 +177,95 @@ TEST(variant, conversion_constructor)
     ASSERT_EQ(v2.get_as<double>(), 1.5);
 }
 
+struct copy_move_tracker
+{
+    int value = 0;
+    int* copy_count = nullptr;
+    int* move_count = nullptr;
+
+    copy_move_tracker() = default;
+
+    copy_move_tracker(int value, int* copy_count, int* move_count) : value(value), copy_count(copy_count), move_count(move_count)
+    {
+    }
+
+    copy_move_tracker(const copy_move_tracker& other) : value(other.value), copy_count(other.copy_count), move_count(other.move_count)
+    {
+        if (copy_count)
+        {
+            ++(*copy_count);
+        }
+    }
+
+    copy_move_tracker(copy_move_tracker&& other) noexcept : value(other.value), copy_count(other.copy_count), move_count(other.move_count)
+    {
+        if (move_count)
+        {
+            ++(*move_count);
+        }
+    }
+
+    copy_move_tracker& operator=(const copy_move_tracker& other)
+    {
+        value = other.value;
+        copy_count = other.copy_count;
+        move_count = other.move_count;
+        if (copy_count)
+        {
+            ++(*copy_count);
+        }
+        return *this;
+    }
+
+    copy_move_tracker& operator=(copy_move_tracker&& other) noexcept
+    {
+        value = other.value;
+        copy_count = other.copy_count;
+        move_count = other.move_count;
+        if (move_count)
+        {
+            ++(*move_count);
+        }
+        return *this;
+    }
+
+    auto operator<=>(const copy_move_tracker&) const = default;
+};
+
+TEST(variant, rvalue_value_constructor_and_assignment_move_the_payload)
+{
+    int copy_count = 0;
+    int move_count = 0;
+
+    rpnx::variant<int, copy_move_tracker> v(copy_move_tracker(7, &copy_count, &move_count));
+    ASSERT_EQ(v.index(), 1);
+    ASSERT_EQ(v.get_as<copy_move_tracker>().value, 7);
+    ASSERT_EQ(copy_count, 0);
+    ASSERT_EQ(move_count, 1);
+
+    copy_count = 0;
+    move_count = 0;
+
+    rpnx::variant<int, copy_move_tracker> v2(0);
+    v2 = copy_move_tracker(9, &copy_count, &move_count);
+    ASSERT_EQ(v2.index(), 1);
+    ASSERT_EQ(v2.get_as<copy_move_tracker>().value, 9);
+    ASSERT_EQ(copy_count, 0);
+    ASSERT_EQ(move_count, 1);
+}
+
+TEST(variant, converting_value_constructor_and_assignment_use_the_selected_alternative_type)
+{
+    rpnx::variant<std::string, int> v("hello");
+    ASSERT_EQ(v.index(), 0);
+    ASSERT_EQ(v.get_as<std::string>(), "hello");
+
+    rpnx::variant<std::string, int> v2(0);
+    v2 = "world";
+    ASSERT_EQ(v2.index(), 0);
+    ASSERT_EQ(v2.get_as<std::string>(), "world");
+}
+
 TEST(variant, exceptions)
 {
     rpnx::variant<int, std::string> v(42);
