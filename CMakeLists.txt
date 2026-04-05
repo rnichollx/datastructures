@@ -16,6 +16,7 @@ add_library(rpnx_datastructures INTERFACE
         include/rpnx/variant.hpp
         include/rpnx/functional.hpp
         include/rpnx/memory.hpp
+        include/rpnx/dyn_iterator.hpp
 )
 
 
