@@ -6,6 +6,7 @@
 
 #include "rpnx/functional.hpp"
 #include "test_utils.hpp"
+#include <cstddef>
 #include <functional>
 
 TEST(function, rpnx_function_default_ctor)
@@ -31,6 +32,24 @@ TEST(function, rpnx_function_copy)
     EXPECT_TRUE(f2);
     EXPECT_EQ(f2(), 2);
     EXPECT_EQ(f1(), 3);
+}
+
+TEST(function, rpnx_function_copy2)
+{
+    int call_count = 0;
+    rpnx::function< int() > f1 = [call_count]() mutable
+    {
+        return ++call_count;
+    };
+
+    EXPECT_TRUE(f1);
+    EXPECT_EQ(f1(), 1);
+
+    rpnx::function< int() > f2 = f1;
+    EXPECT_TRUE(f2);
+    EXPECT_EQ(f2(), 2);
+    EXPECT_EQ(f2(), 3);
+    EXPECT_EQ(f1(), 2);
 }
 
 TEST(function, rpnx_function_move)
@@ -142,6 +161,34 @@ struct LifetimeTracker
     }
 };
 
+struct LargeAllocatedFunctor
+{
+    int data[10] = {};
+
+    static int alloc_count;
+    static int dealloc_count;
+
+    static void* operator new(std::size_t size)
+    {
+        ++alloc_count;
+        return ::operator new(size);
+    }
+
+    static void operator delete(void* ptr) noexcept
+    {
+        ++dealloc_count;
+        ::operator delete(ptr);
+    }
+
+    int operator()()
+    {
+        return 31;
+    }
+};
+
+int LargeAllocatedFunctor::alloc_count = 0;
+int LargeAllocatedFunctor::dealloc_count = 0;
+
 TEST(function, rpnx_function_lifetime)
 {
     int destroyed = 0;
@@ -192,6 +239,22 @@ TEST(function, rpnx_function_large_lifetime)
         rpnx::function< int() > f = LargeLifetimeTracker(&destroyed);
     }
     EXPECT_EQ(destroyed, 2);
+}
+
+TEST(function, non_sbo_uses_matching_functor_allocation)
+{
+    LargeAllocatedFunctor::alloc_count = 0;
+    LargeAllocatedFunctor::dealloc_count = 0;
+
+    {
+        rpnx::function< int() > f = LargeAllocatedFunctor();
+        EXPECT_EQ(f(), 31);
+        rpnx::function< int() > copy = f;
+        EXPECT_EQ(copy(), 31);
+    }
+
+    EXPECT_EQ(LargeAllocatedFunctor::alloc_count, 2);
+    EXPECT_EQ(LargeAllocatedFunctor::dealloc_count, 2);
 }
 
 TEST(function, rpnx_function_argument_passing)

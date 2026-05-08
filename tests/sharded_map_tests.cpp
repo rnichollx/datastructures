@@ -14,15 +14,21 @@
 
 #include "gtest/gtest.h"
 
-#include "rpnx/sharded_unordered_map.hpp"
 #include "failing_allocator.hpp"
+#include "rpnx/sharded_unordered_map.hpp"
 #include "tracking_allocator.hpp"
 #include <algorithm>
 #include <numeric>
+#include <type_traits>
+
+static_assert(!std::is_copy_constructible_v< rpnx::conc_sharded_unordered_map< int, int > >);
+static_assert(!std::is_copy_assignable_v< rpnx::conc_sharded_unordered_map< int, int > >);
+static_assert(!std::is_move_constructible_v< rpnx::conc_sharded_unordered_map< int, int > >);
+static_assert(!std::is_move_assignable_v< rpnx::conc_sharded_unordered_map< int, int > >);
 
 TEST(conc_sharded_unordered_map, put_and_get)
 {
-    rpnx::conc_sharded_unordered_map<int, std::string> map;
+    rpnx::conc_sharded_unordered_map< int, std::string > map;
     map.put(1, "one");
     map.put(2, "two");
     map.put(3, "three");
@@ -34,19 +40,20 @@ TEST(conc_sharded_unordered_map, put_and_get)
 
 TEST(conc_sharded_unordered_map, concurrent_access)
 {
-    rpnx::conc_sharded_unordered_map<int, int> map;
+    rpnx::conc_sharded_unordered_map< int, int > map;
 
     const int num_threads = 32;
     const int num_elements_per_thread = 100000;
 
-    auto insert_func = [&map](int thread_id) {
+    auto insert_func = [&map](int thread_id)
+    {
         for (int i = 0; i < num_elements_per_thread; ++i)
         {
             map.put(thread_id * num_elements_per_thread + i, i);
         }
     };
 
-    std::vector<std::thread> threads;
+    std::vector< std::thread > threads;
     for (int t = 0; t < num_threads; ++t)
     {
         threads.emplace_back(insert_func, t);
@@ -68,7 +75,7 @@ TEST(conc_sharded_unordered_map, concurrent_access)
 
 TEST(conc_sharded_unordered_map, exclusive_range)
 {
-    rpnx::conc_sharded_unordered_map<int, int> map(4);
+    rpnx::conc_sharded_unordered_map< int, int > map(4);
     for (int i = 0; i < 100; ++i)
     {
         map.put(i, i * 2);
@@ -94,7 +101,7 @@ TEST(conc_sharded_unordered_map, exclusive_range)
 
 TEST(conc_sharded_unordered_map, size)
 {
-    rpnx::conc_sharded_unordered_map<int, int> map(4);
+    rpnx::conc_sharded_unordered_map< int, int > map(4);
 
     // Because no other thread is concurrently modifying this map, estimate_size is guaranteed to
     // return the actual size.

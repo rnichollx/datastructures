@@ -14,21 +14,22 @@
 
 #include "gtest/gtest.h"
 
-#include "rpnx/segmented_dynar.hpp"
 #include "failing_allocator.hpp"
+#include "rpnx/segmented_dynar.hpp"
 #include "tracking_allocator.hpp"
 #include <algorithm>
+#include <limits>
 #include <numeric>
 
 TEST(segmented_dynar, construct_empty)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     EXPECT_EQ(arr.size(), 0);
 }
 
 TEST(segmented_dynar, push_back_and_access)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.push_back(10);
     arr.push_back(20);
     arr.push_back(30);
@@ -45,7 +46,7 @@ TEST(segmented_dynar, push_back_and_access)
 
 TEST(segmented_dynar, at_out_of_range)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.push_back(10);
     arr.push_back(20);
 
@@ -55,7 +56,7 @@ TEST(segmented_dynar, at_out_of_range)
 
 TEST(segmented_dynar, reserve_capacity)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.reserve(10);
     EXPECT_GE(arr.capacity(), 10);
 
@@ -71,9 +72,16 @@ TEST(segmented_dynar, reserve_capacity)
     }
 }
 
+TEST(segmented_dynar, reserve_rejects_capacity_that_would_overflow_segment_math)
+{
+    rpnx::segmented_dynar< int > arr;
+
+    EXPECT_THROW(arr.reserve((std::numeric_limits< std::size_t >::max() / 2) + 2), std::length_error);
+}
+
 TEST(segmented_dynar, pop_back)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.push_back(1);
     arr.push_back(2);
     arr.push_back(3);
@@ -94,7 +102,7 @@ TEST(segmented_dynar, pop_back)
 
 TEST(segmented_dynar, clear_and_reset)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     for (int i = 0; i < 20; ++i)
     {
         arr.push_back(i);
@@ -117,7 +125,7 @@ TEST(segmented_dynar, clear_and_reset)
 
 TEST(segmented_dynar, front_back)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.push_back(10);
     arr.push_back(20);
     arr.push_back(30);
@@ -138,7 +146,7 @@ TEST(segmented_dynar, front_back)
 
 TEST(segmented_dynar, assign_count)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.push_back(1);
     arr.assign(5, 42);
     EXPECT_EQ(arr.size(), 5);
@@ -150,8 +158,8 @@ TEST(segmented_dynar, assign_count)
 
 TEST(segmented_dynar, assign_range)
 {
-    rpnx::segmented_dynar<int> arr;
-    std::vector<int> vec = {1, 2, 3, 4, 5};
+    rpnx::segmented_dynar< int > arr;
+    std::vector< int > vec = {1, 2, 3, 4, 5};
     arr.assign(vec.begin(), vec.end());
     EXPECT_EQ(arr.size(), 5);
     for (int i = 0; i < 5; ++i)
@@ -162,7 +170,7 @@ TEST(segmented_dynar, assign_range)
 
 TEST(segmented_dynar, assign_initializer_list)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.assign({10, 20, 30});
     EXPECT_EQ(arr.size(), 3);
     EXPECT_EQ(arr[0], 10);
@@ -172,7 +180,7 @@ TEST(segmented_dynar, assign_initializer_list)
 
 TEST(segmented_dynar, emplace_back)
 {
-    rpnx::segmented_dynar<std::pair<int, std::string>> arr;
+    rpnx::segmented_dynar< std::pair< int, std::string > > arr;
     arr.emplace_back(1, "one");
     arr.emplace_back(2, "two");
     arr.emplace_back(3, "three");
@@ -188,7 +196,7 @@ TEST(segmented_dynar, emplace_back)
 
 TEST(segmented_dynar, large_number_of_elements)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     const int num_elements = 10000;
 
     for (int i = 0; i < num_elements; ++i)
@@ -205,20 +213,20 @@ TEST(segmented_dynar, large_number_of_elements)
 
 TEST(segmented_dynar, copy_constructor_and_assignment)
 {
-    rpnx::segmented_dynar<int> arr1;
+    rpnx::segmented_dynar< int > arr1;
     for (int i = 0; i < 10; ++i)
     {
         arr1.push_back(i);
     }
 
-    rpnx::segmented_dynar<int> arr2 = arr1; // Copy constructor
+    rpnx::segmented_dynar< int > arr2 = arr1; // Copy constructor
     EXPECT_EQ(arr2.size(), arr1.size());
     for (int i = 0; i < arr2.size(); ++i)
     {
         EXPECT_EQ(arr2[i], arr1[i]);
     }
 
-    rpnx::segmented_dynar<int> arr3;
+    rpnx::segmented_dynar< int > arr3;
     arr3 = arr1; // Copy assignment
     EXPECT_EQ(arr3.size(), arr1.size());
     for (int i = 0; i < arr3.size(); ++i)
@@ -229,32 +237,32 @@ TEST(segmented_dynar, copy_constructor_and_assignment)
 
 TEST(segmented_dynar, reserve_leak_on_exception)
 {
-    using Alloc = testutils::failing_allocator<int>;
-    testutils::failing_allocator<int>::allocation_count = 0;
-    testutils::failing_allocator<int>::fail_at = 999;
-    testutils::failing_allocator<int>::total_allocations = 0;
+    using Alloc = testutils::failing_allocator< int >;
+    testutils::failing_allocator< int >::allocation_count = 0;
+    testutils::failing_allocator< int >::fail_at = 999;
+    testutils::failing_allocator< int >::total_allocations = 0;
 
-    rpnx::segmented_dynar<int, Alloc> arr;
+    rpnx::segmented_dynar< int, Alloc > arr;
 
     // Initial allocations to set up some state
     arr.push_back(1);
     arr.push_back(2);
 
-    int initial_allocations = testutils::failing_allocator<int>::total_allocations;
+    int initial_allocations = testutils::failing_allocator< int >::total_allocations;
 
     // Now we want reserve to fail after some segments are allocated
-    testutils::failing_allocator<int>::fail_at = testutils::failing_allocator<int>::allocation_count + 2;
+    testutils::failing_allocator< int >::fail_at = testutils::failing_allocator< int >::allocation_count + 2;
     // Fail on the 2nd NEW element allocation in reserve
 
     EXPECT_THROW(arr.reserve(100), std::bad_alloc);
 
-    EXPECT_EQ(testutils::failing_allocator<int>::total_allocations, initial_allocations);
+    EXPECT_EQ(testutils::failing_allocator< int >::total_allocations, initial_allocations);
 }
 
 TEST(segmented_dynar, allocator_propagation_copy_assignment)
 {
-    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c1(testutils::tracking_allocator<int>(1));
-    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c2(testutils::tracking_allocator<int>(2));
+    rpnx::segmented_dynar< int, testutils::tracking_allocator< int > > c1(testutils::tracking_allocator< int >(1));
+    rpnx::segmented_dynar< int, testutils::tracking_allocator< int > > c2(testutils::tracking_allocator< int >(2));
 
     c2 = c1;
     // Should propagate
@@ -263,8 +271,8 @@ TEST(segmented_dynar, allocator_propagation_copy_assignment)
 
 TEST(segmented_dynar, allocator_non_propagation_copy_assignment)
 {
-    rpnx::segmented_dynar<int, testutils::non_propagate_allocator<int>> c1(testutils::non_propagate_allocator<int>(1));
-    rpnx::segmented_dynar<int, testutils::non_propagate_allocator<int>> c2(testutils::non_propagate_allocator<int>(2));
+    rpnx::segmented_dynar< int, testutils::non_propagate_allocator< int > > c1(testutils::non_propagate_allocator< int >(1));
+    rpnx::segmented_dynar< int, testutils::non_propagate_allocator< int > > c2(testutils::non_propagate_allocator< int >(2));
 
     c2 = c1;
     // Should NOT propagate
@@ -273,8 +281,8 @@ TEST(segmented_dynar, allocator_non_propagation_copy_assignment)
 
 TEST(segmented_dynar, allocator_copy_construction)
 {
-    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c1(testutils::tracking_allocator<int>(1));
-    rpnx::segmented_dynar<int, testutils::tracking_allocator<int>> c2 = c1;
+    rpnx::segmented_dynar< int, testutils::tracking_allocator< int > > c1(testutils::tracking_allocator< int >(1));
+    rpnx::segmented_dynar< int, testutils::tracking_allocator< int > > c2 = c1;
 
     // Should use select_on_container_copy_construction
     EXPECT_EQ(c2.get_allocator().id, 101);
@@ -282,14 +290,14 @@ TEST(segmented_dynar, allocator_copy_construction)
 
 TEST(segmented_dynar, iterator_begin_end_empty)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     EXPECT_EQ(arr.begin(), arr.end());
     EXPECT_EQ(arr.cbegin(), arr.cend());
 }
 
 TEST(segmented_dynar, iterator_forward_iteration)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     for (int i = 0; i < 100; ++i)
     {
         arr.push_back(i);
@@ -305,7 +313,7 @@ TEST(segmented_dynar, iterator_forward_iteration)
 
 TEST(segmented_dynar, iterator_backward_iteration)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     for (int i = 0; i < 100; ++i)
     {
         arr.push_back(i);
@@ -323,7 +331,7 @@ TEST(segmented_dynar, iterator_backward_iteration)
 
 TEST(segmented_dynar, iterator_post_increment_decrement)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.push_back(1);
     arr.push_back(2);
 
@@ -336,7 +344,7 @@ TEST(segmented_dynar, iterator_post_increment_decrement)
 
 TEST(segmented_dynar, iterator_random_access_arithmetic)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     for (int i = 0; i < 1000; ++i)
     {
         arr.push_back(i);
@@ -359,7 +367,7 @@ TEST(segmented_dynar, iterator_random_access_arithmetic)
 
 TEST(segmented_dynar, iterator_subscript_operator)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     for (int i = 0; i < 100; ++i)
     {
         arr.push_back(i);
@@ -374,8 +382,9 @@ TEST(segmented_dynar, iterator_subscript_operator)
 
 TEST(segmented_dynar, iterator_comparison_operators)
 {
-    rpnx::segmented_dynar<int> arr;
-    for (int i = 0; i < 10; ++i) arr.push_back(i);
+    rpnx::segmented_dynar< int > arr;
+    for (int i = 0; i < 10; ++i)
+        arr.push_back(i);
 
     auto it1 = arr.begin() + 2;
     auto it2 = arr.begin() + 5;
@@ -396,11 +405,11 @@ TEST(segmented_dynar, iterator_comparison_operators)
 
 TEST(segmented_dynar, iterator_const_iterator_interop)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     arr.push_back(10);
 
-    rpnx::segmented_dynar<int>::iterator it = arr.begin();
-    rpnx::segmented_dynar<int>::const_iterator cit = it; // Conversion
+    rpnx::segmented_dynar< int >::iterator it = arr.begin();
+    rpnx::segmented_dynar< int >::const_iterator cit = it; // Conversion
 
     EXPECT_EQ(*it, *cit);
     EXPECT_TRUE(it == cit);
@@ -411,8 +420,9 @@ TEST(segmented_dynar, iterator_const_iterator_interop)
 
 TEST(segmented_dynar, iterator_stl_algorithms)
 {
-    rpnx::segmented_dynar<int> arr;
-    for (int i = 0; i < 100; ++i) arr.push_back(100 - i);
+    rpnx::segmented_dynar< int > arr;
+    for (int i = 0; i < 100; ++i)
+        arr.push_back(100 - i);
 
     std::sort(arr.begin(), arr.end());
 
@@ -431,9 +441,10 @@ TEST(segmented_dynar, iterator_stl_algorithms)
 
 TEST(segmented_dynar, iterator_large_scale_iteration)
 {
-    rpnx::segmented_dynar<int> arr;
+    rpnx::segmented_dynar< int > arr;
     const int count = 10000;
-    for (int i = 0; i < count; ++i) arr.push_back(i);
+    for (int i = 0; i < count; ++i)
+        arr.push_back(i);
 
     int i = 0;
     for (int val : arr)
@@ -449,7 +460,7 @@ TEST(segmented_dynar, iterator_arrow_operator)
     {
         int x;
     };
-    rpnx::segmented_dynar<S> arr;
+    rpnx::segmented_dynar< S > arr;
     arr.push_back({42});
 
     auto it = arr.begin();

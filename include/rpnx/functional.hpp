@@ -7,9 +7,10 @@
 #include <array>
 #include <cstddef>
 #include <cstring>
+#include <functional>
+#include <memory>
 #include <type_traits>
 #include <utility>
-#include <memory>
 
 namespace rpnx
 {
@@ -158,20 +159,8 @@ namespace rpnx
             {
                 // For non-SBO, we need to allocate a new Functor on the heap and copy-construct it.
                 const Functor* other_ptr = get_storage_address< Functor >(other);
-                // throws: bad alloc
-                auto new_functor = new std::aligned_storage_t< sizeof(Functor), alignof(Functor) >();
-                try
-                {
-                    // maybe throws: copy constructor of Functor
-                    // Need to deallocate storage if this happens.
-                    new ((void*)new_functor) Functor(*other_ptr);
-                }
-                catch (...)
-                {
-                    delete reinterpret_cast< std::aligned_storage_t< sizeof(Functor), alignof(Functor) >* >(new_functor);
-                    throw;
-                }
-                new ((void*)self->m_storage.data()) Functor*(std::launder< Functor >((Functor*)new_functor));
+                Functor* new_functor = new Functor(*other_ptr);
+                new ((void*)self->m_storage.data()) Functor*(new_functor);
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = &call_impl< Functor >;
             }
@@ -224,21 +213,9 @@ namespace rpnx
             {
                 // For non-SBO, we need to allocate a new Functor on the heap and copy-construct it.
                 const Functor* other_ptr = get_storage_address< Functor >(other);
-                // throws: bad alloc
-                auto new_functor = new std::aligned_storage_t< sizeof(Functor), alignof(Functor) >();
-                try
-                {
-                    // maybe throws: copy constructor of Functor
-                    // Need to deallocate storage if this happens.
-                    new ((void*)new_functor) Functor(*other_ptr);
-                }
-                catch (...)
-                {
-                    delete reinterpret_cast< std::aligned_storage_t< sizeof(Functor), alignof(Functor) >* >(new_functor);
-                    throw;
-                }
+                Functor* new_functor = new Functor(*other_ptr);
                 self->m_impl_tbl->m_destroy(self);
-                new ((void*)self->m_storage.data()) Functor*(std::launder< Functor >((Functor*)new_functor));
+                new ((void*)self->m_storage.data()) Functor*(new_functor);
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = vtbl< Functor >.m_call;
             }
@@ -348,13 +325,7 @@ namespace rpnx
         template < typename Functor >
         static constexpr impl_tbl const vtbl = make_impl_tbl< Functor >();
         template < auto& Function >
-        static constexpr impl_tbl const free_vtbl = { .m_copy_ctor = &free_copy_ctor_impl<Function>,
-                .m_copy_assign = &free_copy_assign_impl<Function>,
-                .m_move_ctor = &free_move_ctor_impl<Function>,
-                .m_move_assign = &free_move_assign_impl<Function>,
-                .m_reset = &null_reset_impl,
-                .m_destroy = &null_destroy_impl,
-                .m_call = &free_call_impl<Function> };
+        static constexpr impl_tbl const free_vtbl = {.m_copy_ctor = &free_copy_ctor_impl< Function >, .m_copy_assign = &free_copy_assign_impl< Function >, .m_move_ctor = &free_move_ctor_impl< Function >, .m_move_assign = &free_move_assign_impl< Function >, .m_reset = &null_reset_impl, .m_destroy = &null_destroy_impl, .m_call = &free_call_impl< Function >};
 
         static constexpr impl_tbl const void_vtbl = make_null_impl_tbl();
 
@@ -397,17 +368,8 @@ namespace rpnx
             }
             else
             {
-                auto storage = new std::aligned_storage_t< sizeof(Decayed), alignof(Decayed) >();
-                try
-                {
-                    new ((void*)storage) Decayed(std::forward< Functor >(f));
-                }
-                catch (...)
-                {
-                    delete storage;
-                    throw;
-                }
-                new ((void*)m_storage.data()) Decayed*(std::launder< Decayed >(reinterpret_cast< Decayed* >(storage)));
+                Decayed* storage = new Decayed(std::forward< Functor >(f));
+                new ((void*)m_storage.data()) Decayed*(storage);
                 m_impl_tbl = &vtbl< Decayed >;
                 m_callable = &call_impl< Decayed >;
             }

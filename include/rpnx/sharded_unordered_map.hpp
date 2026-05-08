@@ -3,44 +3,69 @@
 #ifndef RPNXDATASTRUCTURES_SHARDED_MAP_HPP
 #define RPNXDATASTRUCTURES_SHARDED_MAP_HPP
 
-#include <thread>
-#include <unordered_map>
-#include <vector>
-#include <new>
-#include <mutex>
 #include <iterator>
+#include <mutex>
+#include <new>
+#include <thread>
 #include <type_traits>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace rpnx
 {
-    template <typename Key, typename Value, typename Hash = std::hash<Key>, typename KeyEqual = std::equal_to<Key>,
-              typename Alloc = std::allocator<std::pair<const Key, Value>>>
+    /**
+     * A sharded unordered map that serializes operations per shard.
+     *
+     * @tparam Key The key type used to index values.
+     * @tparam Value The mapped value type.
+     * @tparam Hash The hash functor used to choose shards and hash keys inside each shard.
+     * @tparam KeyEqual The key equality predicate used inside each shard.
+     * @tparam Alloc The allocator used by the shard maps and rebound for shard storage.
+     *
+     * Operations that access the container structure lock the affected shard. Methods that return a reference release
+     * that lock before returning; the caller is responsible for ensuring the referenced element is not erased, replaced,
+     * or otherwise concurrently modified while the reference is being used.
+     *
+     * References to existing elements are not invalidated by inserting other elements into the map, including insertions
+     * that rehash the underlying std::unordered_map. They are invalidated by erasing the referenced element and by
+     * destroying the map.
+     */
+    template < typename Key, typename Value, typename Hash = std::hash< Key >, typename KeyEqual = std::equal_to< Key >, typename Alloc = std::allocator< std::pair< const Key, Value > > >
     class conc_sharded_unordered_map
     {
         struct alignas(std::hardware_destructive_interference_size) shard
         {
-            std::aligned_storage_t<sizeof(std::mutex), alignof(std::mutex)> m_mutex;
-            std::unordered_map<Key, Value, Hash, KeyEqual, Alloc> m_map;
+            mutable std::mutex m_mutex;
+            std::unordered_map< Key, Value, Hash, KeyEqual, Alloc > m_map;
 
             std::mutex& get_mutex() const
             {
-                return *std::launder(reinterpret_cast<std::mutex*>(const_cast<std::aligned_storage_t<sizeof(std::mutex), alignof(std::mutex)>*>(&m_mutex)));
+                return m_mutex;
             }
 
-            shard(Alloc alloc)
-                : m_map(0, Hash(), KeyEqual(), alloc)
+            shard(Alloc alloc) : m_map(0, Hash(), KeyEqual(), alloc)
             {
             }
+
+            shard(shard const&) = delete;
+            shard& operator=(shard const&) = delete;
+
+            shard(shard&& other) noexcept(std::is_nothrow_move_constructible_v< decltype(m_map) >) : m_map(std::move(other.m_map))
+            {
+            }
+
+            shard& operator=(shard&&) = delete;
         };
 
-        std::vector<shard, typename std::allocator_traits<Alloc>::template rebind_alloc<shard>> m_shards;
+        std::vector< shard, typename std::allocator_traits< Alloc >::template rebind_alloc< shard > > m_shards;
 
-        template <bool IsConst>
+        template < bool IsConst >
         class basic_iterator
         {
-            using map_type = std::conditional_t<IsConst, const conc_sharded_unordered_map, conc_sharded_unordered_map>;
-            using shard_type = std::conditional_t<IsConst, const shard, shard>;
-            using inner_iterator = std::conditional_t<IsConst, typename std::unordered_map<Key, Value, Hash, KeyEqual, Alloc>::const_iterator, typename std::unordered_map<Key, Value, Hash, KeyEqual, Alloc>::iterator>;
+            using map_type = std::conditional_t< IsConst, const conc_sharded_unordered_map, conc_sharded_unordered_map >;
+            using shard_type = std::conditional_t< IsConst, const shard, shard >;
+            using inner_iterator = std::conditional_t< IsConst, typename std::unordered_map< Key, Value, Hash, KeyEqual, Alloc >::const_iterator, typename std::unordered_map< Key, Value, Hash, KeyEqual, Alloc >::iterator >;
 
             map_type* m_map;
             std::size_t m_shard_index;
@@ -59,16 +84,17 @@ namespace rpnx
                 }
             }
 
-        public:
+          public:
             using iterator_category = std::forward_iterator_tag;
-            using value_type = std::pair<const Key, Value>;
+            using value_type = std::pair< const Key, Value >;
             using difference_type = std::ptrdiff_t;
-            using pointer = std::conditional_t<IsConst, const value_type*, value_type*>;
-            using reference = std::conditional_t<IsConst, const value_type&, value_type&>;
+            using pointer = std::conditional_t< IsConst, const value_type*, value_type* >;
+            using reference = std::conditional_t< IsConst, const value_type&, value_type& >;
 
-            basic_iterator() : m_map(nullptr), m_shard_index(0), m_inner() {}
-            basic_iterator(map_type* map, std::size_t shard_index, inner_iterator inner)
-                : m_map(map), m_shard_index(shard_index), m_inner(inner)
+            basic_iterator() : m_map(nullptr), m_shard_index(0), m_inner()
+            {
+            }
+            basic_iterator(map_type* map, std::size_t shard_index, inner_iterator inner) : m_map(map), m_shard_index(shard_index), m_inner(inner)
             {
                 if (m_map && m_shard_index < m_map->m_shards.size())
                 {
@@ -76,8 +102,14 @@ namespace rpnx
                 }
             }
 
-            reference operator*() const { return *m_inner; }
-            pointer operator->() const { return &(*m_inner); }
+            reference operator*() const
+            {
+                return *m_inner;
+            }
+            pointer operator->() const
+            {
+                return &(*m_inner);
+            }
 
             basic_iterator& operator++()
             {
@@ -95,52 +127,83 @@ namespace rpnx
 
             [[nodiscard]] bool operator==(const basic_iterator& other) const
             {
-                if (m_map != other.m_map) return false;
-                if (m_shard_index != other.m_shard_index) return false;
-                if (m_shard_index >= (m_map ? m_map->m_shards.size() : 0)) return true;
+                if (m_map != other.m_map)
+                    return false;
+                if (m_shard_index != other.m_shard_index)
+                    return false;
+                if (m_shard_index >= (m_map ? m_map->m_shards.size() : 0))
+                    return true;
                 return m_inner == other.m_inner;
             }
 
-            bool operator!=(const basic_iterator& other) const { return !(*this == other); }
+            bool operator!=(const basic_iterator& other) const
+            {
+                return !(*this == other);
+            }
         };
 
-
-        template <typename Iterator>
+        template < typename Iterator >
         struct range
         {
             Iterator m_begin;
             Iterator m_end;
-            Iterator begin() { return std::move(m_begin); }
-            Iterator end() { return std::move(m_end); }
+            Iterator begin()
+            {
+                return std::move(m_begin);
+            }
+            Iterator end()
+            {
+                return std::move(m_end);
+            }
         };
 
-    public:
-        using iterator = basic_iterator<false>;
-        using const_iterator = basic_iterator<true>;
+      public:
+        /**
+         * Mutable forward iterator type for exclusive whole-map iteration.
+         *
+         * @note Iterators are only safe to use with the range returned by range_exclusive() while no other thread is
+         * mutating the map.
+         */
+        using iterator = basic_iterator< false >;
 
         /**
-         * A thread-unsafe method to get a range that can iterate over the entire conc_sharded_unordered_map.
-         * @note This method is not thread-safe and should only be used when no other threads are mutating the map.
-         * @return A range that can iterate over the conc_sharded_unordered_map.
+         * Const forward iterator type for exclusive whole-map iteration.
+         *
+         * @note Iterators are only safe to use with the range returned by range_exclusive() while no other thread is
+         * mutating the map.
          */
-        [[nodiscard]] range<iterator> range_exclusive()
+        using const_iterator = basic_iterator< true >;
+
+        /**
+         * Returns a mutable range over all shards without locking.
+         *
+         * @return A range that iterates over every element in the map.
+         * @pre No other thread may mutate the map while the returned range or its iterators are used.
+         * @note This method is intended for exclusive access phases such as setup, teardown, or single-threaded
+         * inspection.
+         */
+        [[nodiscard]] range< iterator > range_exclusive()
         {
             return {iterator(this, 0, m_shards[0].m_map.begin()), iterator(this, m_shards.size(), {})};
         }
 
         /**
-         * A thread-unsafe method to get a range that can iterate over the entire conc_sharded_unordered_map.
-         * @note This method is not thread-safe and should only be used when no other threads are mutating the map.
-         * @return A const range that can iterate over the conc_sharded_unordered_map.
+         * Returns a const range over all shards without locking.
+         *
+         * @return A range that iterates over every element in the map.
+         * @pre No other thread may mutate the map while the returned range or its iterators are used.
+         * @note This method is intended for exclusive access phases such as setup, teardown, or single-threaded
+         * inspection.
          */
-        [[nodiscard]] range<const_iterator> range_exclusive() const
+        [[nodiscard]] range< const_iterator > range_exclusive() const
         {
             return {const_iterator(this, 0, m_shards[0].m_map.begin()), const_iterator(this, m_shards.size(), {})};
         }
 
         /**
-         * Estimates the number of elements in the map.
-         * @return The total number of elements.
+         * Estimates the number of elements in the map while locking each shard independently.
+         *
+         * @return The sum of the shard sizes observed during the call.
          * @note If no other threads are concurrently modifying the map, this method will always return the correct size.
          * @note This operation is thread-safe, but non-atomic. Because it works by non-atomically adding counts from
          * each shard, the returned value may be sequentially inconsistent if other threads are concurrently modifying
@@ -153,7 +216,7 @@ namespace rpnx
             std::size_t total_size = 0;
             for (const auto& shard : m_shards)
             {
-                std::lock_guard<std::mutex> lock(shard.get_mutex());
+                std::lock_guard< std::mutex > lock(shard.get_mutex());
                 total_size += shard.m_map.size();
             }
             return total_size;
@@ -161,8 +224,10 @@ namespace rpnx
 
         /**
          * Returns the number of elements in the map without locking.
-         * @note This method is not thread-safe and should only be used when no other threads are mutating the map.
+         *
          * @return The total number of elements.
+         * @pre No other thread may mutate the map while this function runs.
+         * @note Use estimate_size() when concurrent mutation is possible.
          */
         [[nodiscard]] std::size_t size_exclusive() const
         {
@@ -174,9 +239,14 @@ namespace rpnx
             return total_size;
         }
 
-        explicit conc_sharded_unordered_map(std::size_t shard_count = std::thread::hardware_concurrency() * 2,
-                                            Alloc const& alloc = Alloc())
-            : m_shards((typename std::allocator_traits<Alloc>::template rebind_alloc<shard>)(alloc))
+        /**
+         * Constructs a sharded map.
+         *
+         * @param shard_count Requested number of shards. If zero or not a power of two, it is rounded up to the next
+         * power of two so shard selection can use a mask.
+         * @param alloc Allocator used for the underlying unordered maps and rebound for shard storage.
+         */
+        explicit conc_sharded_unordered_map(std::size_t shard_count = std::thread::hardware_concurrency() * 2, Alloc const& alloc = Alloc()) : m_shards((typename std::allocator_traits< Alloc >::template rebind_alloc< shard >)(alloc))
         {
             if (shard_count == 0 || (shard_count & (shard_count - 1)) != 0)
             {
@@ -192,41 +262,87 @@ namespace rpnx
             for (std::size_t i = 0; i < shard_count; ++i)
             {
                 m_shards.emplace_back(alloc);
-                new(&m_shards[i].m_mutex) std::mutex();
             }
         }
 
-        ~conc_sharded_unordered_map()
-        {
-            for (auto& shard : m_shards)
-            {
-                shard.get_mutex().~mutex();
-            }
-        }
+        /**
+         * Copy construction is disabled because shards contain mutexes and define synchronization ownership.
+         */
+        conc_sharded_unordered_map(conc_sharded_unordered_map const&) = delete;
 
+        /**
+         * Copy assignment is disabled because shards contain mutexes and define synchronization ownership.
+         */
+        conc_sharded_unordered_map& operator=(conc_sharded_unordered_map const&) = delete;
+
+        /**
+         * Move construction is disabled so references and shard synchronization state cannot be relocated.
+         */
+        conc_sharded_unordered_map(conc_sharded_unordered_map&&) = delete;
+
+        /**
+         * Move assignment is disabled so references and shard synchronization state cannot be relocated.
+         */
+        conc_sharded_unordered_map& operator=(conc_sharded_unordered_map&&) = delete;
+
+        /**
+         * Destroys the map and all stored elements.
+         *
+         * @pre No other thread may access the map or any reference obtained from it during destruction.
+         */
+        ~conc_sharded_unordered_map() = default;
+
+        /**
+         * Inserts or replaces the value for a key.
+         *
+         * @param key Key to update.
+         * @param value Value to store.
+         * @note This operation locks only the shard selected by the key.
+         * @note Replacing an existing key modifies that key's stored Value. Other threads must not concurrently use a
+         * reference to that Value unless Value provides its own synchronization.
+         */
         void put(Key const& key, Value value)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             target_shard.m_map[key] = std::move(value);
         }
 
-        template <typename Func>
+        /**
+         * Computes and stores a value for a key, replacing any existing value.
+         *
+         * @tparam Func Nullary callable type used to create the value.
+         * @param key Key to update.
+         * @param func Callable invoked while the target shard is locked.
+         * @note The callable must not call back into this map for a key in the same shard, otherwise it may deadlock.
+         * @note Replacing an existing key modifies that key's stored Value. Other threads must not concurrently use a
+         * reference to that Value unless Value provides its own synchronization.
+         */
+        template < typename Func >
         void put_exec(Key const& key, Func func)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             target_shard.m_map[key] = func();
         }
 
-        template <typename Func>
+        /**
+         * Computes and stores a value only if the key is absent.
+         *
+         * @tparam Func Nullary callable type used to create the value.
+         * @param key Key to insert.
+         * @param func Callable invoked while the target shard is locked if the key is absent.
+         * @return true if a new value was inserted, otherwise false.
+         * @note The callable must not call back into this map for a key in the same shard, otherwise it may deadlock.
+         */
+        template < typename Func >
         bool try_put_exec(Key const& key, Func func)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (target_shard.m_map.find(key) != target_shard.m_map.end())
             {
                 return false;
@@ -235,12 +351,24 @@ namespace rpnx
             return true;
         }
 
-        template <typename Func>
+        /**
+         * Returns the value for a key, creating it if missing.
+         *
+         * @tparam Func Nullary callable type used to create the value when the key is absent.
+         * @param key Key to look up or insert.
+         * @param func Callable invoked while the target shard is locked if the key is absent.
+         * @return A reference to the stored value.
+         * @note The callable must not call back into this map for a key in the same shard, otherwise it may deadlock.
+         * @note The shard lock is released before this function returns. Concurrent insertions of other keys do not
+         * invalidate the returned reference, but erasing this key, destroying the map, or concurrently modifying the
+         * same value while the reference is in use is not allowed unless Value provides its own synchronization.
+         */
+        template < typename Func >
         Value& get_or_create(Key const& key, Func func)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (auto it = target_shard.m_map.find(key); it != target_shard.m_map.end())
             {
                 return it->second;
@@ -252,12 +380,25 @@ namespace rpnx
             }
         }
 
-        template <typename Func>
+        /**
+         * Returns the value for a key, default-constructing and initializing it if missing.
+         *
+         * @tparam Func Callable type invoked as func(Value&) when the key is absent.
+         * @param key Key to look up or insert.
+         * @param func Callable invoked while the target shard is locked to initialize a new value.
+         * @return A reference to the stored value.
+         * @note If func throws, the newly inserted value is erased before the exception is rethrown.
+         * @note The callable must not call back into this map for a key in the same shard, otherwise it may deadlock.
+         * @note The shard lock is released before this function returns. Concurrent insertions of other keys do not
+         * invalidate the returned reference, but erasing this key, destroying the map, or concurrently modifying the
+         * same value while the reference is in use is not allowed unless Value provides its own synchronization.
+         */
+        template < typename Func >
         Value& get_or_init(Key const& key, Func func)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (auto it = target_shard.m_map.find(key); it != target_shard.m_map.end())
             {
                 return it->second;
@@ -278,12 +419,25 @@ namespace rpnx
             }
         }
 
-        template <typename Func>
-        Value& get_or_init_iter(Key const & key, Func func)
+        /**
+         * Returns the value for a key, default-constructing and initializing it with key/value access if missing.
+         *
+         * @tparam Func Callable type invoked as func(Key const&, Value&) when the key is absent.
+         * @param key Key to look up or insert.
+         * @param func Callable invoked while the target shard is locked to initialize a new value.
+         * @return A reference to the stored value.
+         * @note If func throws, the newly inserted value is erased before the exception is rethrown.
+         * @note The callable must not call back into this map for a key in the same shard, otherwise it may deadlock.
+         * @note The shard lock is released before this function returns. Concurrent insertions of other keys do not
+         * invalidate the returned reference, but erasing this key, destroying the map, or concurrently modifying the
+         * same value while the reference is in use is not allowed unless Value provides its own synchronization.
+         */
+        template < typename Func >
+        Value& get_or_init_iter(Key const& key, Func func)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (auto it = target_shard.m_map.find(key); it != target_shard.m_map.end())
             {
                 return it->second;
@@ -304,32 +458,56 @@ namespace rpnx
             }
         }
 
+        /**
+         * Inserts a value only if the key is absent.
+         *
+         * @param key Key to insert.
+         * @param value Value to store if the key is absent.
+         * @return true if a new value was inserted, otherwise false.
+         * @note This operation locks only the shard selected by the key.
+         */
         bool try_put(Key const& key, Value value)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             auto [it, inserted] = target_shard.m_map.emplace(key, std::move(value));
             return inserted;
         }
 
+        /**
+         * Returns a copy of the value for a key.
+         *
+         * @param key Key to look up.
+         * @return A copy of the stored value.
+         * @throws std::out_of_range if the key is absent.
+         * @note This operation locks only the shard selected by the key. The returned copy is independent of subsequent
+         * map operations.
+         */
         Value get(Key const& key)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             return target_shard.m_map.at(key);
         }
 
+        /**
+         * Erases a key from the map.
+         *
+         * @param key Key to erase if present.
+         * @note Any reference, pointer, or iterator to the erased element is invalidated. Callers must ensure no other
+         * thread is still using a reference returned by get_or_create(), get_or_init(), or get_or_init_iter() for this
+         * key.
+         */
         void erase(Key const& key)
         {
             std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
-            std::lock_guard<std::mutex> lock(target_shard.get_mutex());
+            std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             target_shard.m_map.erase(key);
         }
-
     };
-}
+} // namespace rpnx
 
-#endif //RPNXDATASTRUCTURES_SHARDED_MAP_HPP
+#endif // RPNXDATASTRUCTURES_SHARDED_MAP_HPP
