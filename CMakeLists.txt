@@ -17,6 +17,7 @@ add_library(rpnx_datastructures INTERFACE
         include/rpnx/functional.hpp
         include/rpnx/memory.hpp
         include/rpnx/dyn_iterator.hpp
+        include/rpnx/annex.hpp
 )
 
 
@@ -61,6 +62,7 @@ if (BUILD_TESTING)
             tests/variant_tests.cpp
             tests/function_tests.cpp
             tests/result_tests.cpp
+            tests/annex_tests.cpp
             tests/test_utils_tests.cpp
             tests/test_utils.hpp
     )
