@@ -11,6 +11,29 @@
 #include <utility>
 #include <vector>
 
+namespace
+{
+    struct counted_set_key
+    {
+        static int three_way_count;
+
+        int value = 0;
+
+        std::strong_ordering operator<=>(counted_set_key const& other) const
+        {
+            ++three_way_count;
+            return value <=> other.value;
+        }
+
+        bool operator==(counted_set_key const& other) const
+        {
+            return value == other.value;
+        }
+    };
+
+    int counted_set_key::three_way_count = 0;
+} // namespace
+
 static_assert(std::is_same_v< decltype(std::declval< rpnx::set< int > const& >() <=> std::declval< rpnx::set< int > const& >()), std::strong_ordering >);
 
 TEST(set, initializer_list_sorts_and_deduplicates_values)
@@ -83,4 +106,15 @@ TEST(set, equal_size_comparison_forwards_to_underlying_std_set)
     EXPECT_GT(low, high);
     EXPECT_LT(high, low);
     EXPECT_EQ(low <=> high, std::strong_ordering::greater);
+}
+
+TEST(set, spaceship_size_short_circuit_does_not_compare_elements)
+{
+    rpnx::set< counted_set_key > small{{100}};
+    rpnx::set< counted_set_key > large{{1}, {2}};
+
+    counted_set_key::three_way_count = 0;
+
+    EXPECT_EQ(small <=> large, std::strong_ordering::less);
+    EXPECT_EQ(counted_set_key::three_way_count, 0);
 }

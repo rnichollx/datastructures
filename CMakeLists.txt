@@ -19,6 +19,8 @@ add_library(rpnx_datastructures INTERFACE
         include/rpnx/dyn_iterator.hpp
         include/rpnx/annex.hpp
         include/rpnx/set.hpp
+        include/rpnx/map.hpp
+        include/rpnx/dynar.hpp
 )
 
 
@@ -65,6 +67,8 @@ if (BUILD_TESTING)
             tests/result_tests.cpp
             tests/annex_tests.cpp
             tests/set_tests.cpp
+            tests/map_tests.cpp
+            tests/dynar_tests.cpp
             tests/test_utils_tests.cpp
             tests/test_utils.hpp
     )
