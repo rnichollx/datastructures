@@ -808,6 +808,7 @@ namespace rpnx
      * @brief Compares an annex with a raw value for equality.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator==(annex< T, Alloc > const& lhs, U const& rhs)
     {
         return lhs.has_value() ? *lhs == rhs : false;
@@ -817,6 +818,7 @@ namespace rpnx
      * @brief Compares a raw value with an annex for equality.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator==(U const& lhs, annex< T, Alloc > const& rhs)
     {
         return rhs.has_value() ? lhs == *rhs : false;
@@ -826,6 +828,7 @@ namespace rpnx
      * @brief Compares an annex with a raw value for inequality.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator!=(annex< T, Alloc > const& lhs, U const& rhs)
     {
         return !(lhs == rhs);
@@ -835,6 +838,7 @@ namespace rpnx
      * @brief Compares a raw value with an annex for inequality.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator!=(U const& lhs, annex< T, Alloc > const& rhs)
     {
         return !(lhs == rhs);
@@ -844,6 +848,7 @@ namespace rpnx
      * @brief Orders an annex and a raw value.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator<(annex< T, Alloc > const& lhs, U const& rhs)
     {
         return lhs.has_value() ? *lhs < rhs : true;
@@ -853,6 +858,7 @@ namespace rpnx
      * @brief Orders a raw value and an annex.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator<(U const& lhs, annex< T, Alloc > const& rhs)
     {
         return rhs.has_value() ? lhs < *rhs : false;
@@ -862,6 +868,7 @@ namespace rpnx
      * @brief Orders an annex and a raw value.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator<=(annex< T, Alloc > const& lhs, U const& rhs)
     {
         return lhs.has_value() ? *lhs <= rhs : true;
@@ -871,6 +878,7 @@ namespace rpnx
      * @brief Orders a raw value and an annex.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator<=(U const& lhs, annex< T, Alloc > const& rhs)
     {
         return rhs.has_value() ? lhs <= *rhs : false;
@@ -880,6 +888,7 @@ namespace rpnx
      * @brief Orders an annex and a raw value.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator>(annex< T, Alloc > const& lhs, U const& rhs)
     {
         return lhs.has_value() ? *lhs > rhs : false;
@@ -889,6 +898,7 @@ namespace rpnx
      * @brief Orders a raw value and an annex.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator>(U const& lhs, annex< T, Alloc > const& rhs)
     {
         return rhs.has_value() ? lhs > *rhs : true;
@@ -898,6 +908,7 @@ namespace rpnx
      * @brief Orders an annex and a raw value.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator>=(annex< T, Alloc > const& lhs, U const& rhs)
     {
         return lhs.has_value() ? *lhs >= rhs : false;
@@ -907,6 +918,7 @@ namespace rpnx
      * @brief Orders a raw value and an annex.
      */
     template < typename T, typename Alloc, typename U >
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
     bool operator>=(U const& lhs, annex< T, Alloc > const& rhs)
     {
         return rhs.has_value() ? lhs >= *rhs : true;
@@ -916,7 +928,7 @@ namespace rpnx
      * @brief Three-way compares an annex with a raw value when supported.
      */
     template < typename T, typename Alloc, typename U >
-        requires requires(T const& lhs, U const& rhs) { lhs <=> rhs; }
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >) && requires(T const& lhs, U const& rhs) { lhs <=> rhs; }
     auto operator<=>(annex< T, Alloc > const& lhs, U const& rhs) -> decltype(*lhs <=> rhs)
     {
         if (lhs.has_value())
@@ -931,7 +943,7 @@ namespace rpnx
      * @brief Three-way compares a raw value with an annex when supported.
      */
     template < typename T, typename Alloc, typename U >
-        requires requires(U const& lhs, T const& rhs) { lhs <=> rhs; }
+        requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >) && requires(U const& lhs, T const& rhs) { lhs <=> rhs; }
     auto operator<=>(U const& lhs, annex< T, Alloc > const& rhs) -> decltype(lhs <=> *rhs)
     {
         if (rhs.has_value())

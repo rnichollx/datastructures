@@ -646,11 +646,26 @@ namespace rpnx
             // because this is usually not what was intended.
             // This can occur for example,  expression = variant<plus, negate>, struct negate { expression expr; }
             // In this case, a negate can be constructed using a single expression argument, which can ab
-            auto constexpr ok1 = !std::is_same_v< std::remove_cvref_t< T >, basic_variant< Allocator, Ts... > >;
-
-            // And there must be some constructible member type
-            auto constexpr ok2 = (std::is_convertible_v< T, Ts > || ...);
-            return ok1 && ok2;
+            if constexpr (std::is_same_v< std::remove_cvref_t< T >, basic_variant< Allocator, Ts... > >)
+            {
+                return false;
+            }
+            else if constexpr (requires { typename std::remove_cvref_t< T >::value_type; })
+            {
+                if constexpr (std::is_same_v< typename std::remove_cvref_t< T >::value_type, basic_variant< Allocator, Ts... > >)
+                {
+                    return false;
+                }
+                else
+                {
+                    return (std::is_convertible_v< T, Ts > || ...);
+                }
+            }
+            else
+            {
+                // And there must be some constructible member type.
+                return (std::is_convertible_v< T, Ts > || ...);
+            }
         }
 
         /**
