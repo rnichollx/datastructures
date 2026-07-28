@@ -22,10 +22,24 @@
 
 namespace rpnx
 {
-    // segmented_dynar<T> implements a segmented dynamic array of type T,
-    // it has the property that push_back has a worst-case time of O(log n),
-    // while still providing O(1) amortized time for push_back, and O(1) time for access.
-    // It does this by allocating segments of exponentially increasing sizes.
+    /**
+     * @brief Dynamic array backed by exponentially sized stable segments.
+     *
+     * Elements are stored in separately allocated segments. Growing the
+     * container adds segments without relocating existing elements, so element
+     * references and pointers remain valid across `reserve()` and append
+     * operations. Random access is constant time. Appending is amortized O(1)
+     * and O(log n) in the worst case because growth may allocate multiple
+     * segments and a replacement segment-pointer table.
+     *
+     * Iterators are invalidated by operations that change the logical element
+     * sequence. `shrink_to_fit()` may release unused segments but does not move
+     * retained elements. Unless stated otherwise, operations provide the basic
+     * exception guarantee.
+     *
+     * @tparam T Stored element type.
+     * @tparam Alloc Allocator used for elements and rebound for segment metadata.
+     */
     template < typename T, typename Alloc = std::allocator< T > >
     class segmented_dynar
     {
@@ -136,27 +150,39 @@ namespace rpnx
         static_assert(index_subindex(5) == 1);
 
       public:
+        /// Constructs an empty container with a default-constructed allocator.
         segmented_dynar() = default;
 
+        /** @brief Constructs an empty container with an allocator. @param a Allocator to copy. */
         explicit segmented_dynar(const Alloc& a) noexcept : m_alloc(a)
         {
         }
 
+        /** @brief Returns the allocator associated with the container. @return A copy of the allocator. */
         Alloc get_allocator() const noexcept
         {
             return m_alloc;
         }
 
+        /** @brief Returns the number of elements that fit in allocated segments. @return Current capacity. */
         std::size_t capacity() const
         {
             return m_capacity;
         }
 
+        /** @brief Returns the number of constructed elements. @return Current element count. */
         std::size_t size() const
         {
             return m_size;
         }
 
+        /**
+         * @brief Ensures capacity for at least a requested number of elements.
+         * @param new_capacity Requested minimum capacity.
+         * @throws std::length_error if the requested capacity exceeds the
+         * representable segmented layout.
+         * @note Existing elements are not moved; their references remain valid.
+         */
         void reserve(std::size_t new_capacity)
         {
             using segment_allocator_type = typename std::allocator_traits< Alloc >::template rebind_alloc< T* >;
@@ -212,6 +238,11 @@ namespace rpnx
             m_capacity = segment_count_total_capacity(new_segment_count);
         }
 
+        /**
+         * @brief Appends an element by value.
+         * @param value Value copied or moved into the new final element.
+         * @note Existing element references remain valid.
+         */
         void push_back(T value)
         {
             if (size() >= capacity())
@@ -233,6 +264,7 @@ namespace rpnx
             ++m_size;
         }
 
+        /** @brief Accesses an element without bounds checking. @param index Zero-based index. @return Mutable element reference. @pre `index < size()`. */
         T& operator[](std::size_t index)
         {
             std::size_t segment_index = index_segment(index);
@@ -240,6 +272,7 @@ namespace rpnx
             return m_segments[segment_index][sub_index];
         }
 
+        /** @brief Accesses an element without bounds checking. @param index Zero-based index. @return Immutable element reference. @pre `index < size()`. */
         T const& operator[](std::size_t index) const
         {
             std::size_t segment_index = index_segment(index);
@@ -247,6 +280,7 @@ namespace rpnx
             return m_segments[segment_index][sub_index];
         }
 
+        /** @brief Accesses an element with bounds checking. @param index Zero-based index. @return Mutable element reference. @throws std::out_of_range if `index >= size()`. */
         T& at(std::size_t index)
         {
             if (index >= size())
@@ -256,6 +290,7 @@ namespace rpnx
             return (*this)[index];
         }
 
+        /** @brief Accesses an element with bounds checking. @param index Zero-based index. @return Immutable element reference. @throws std::out_of_range if `index >= size()`. */
         T const& at(std::size_t index) const
         {
             if (index >= size())
@@ -265,26 +300,31 @@ namespace rpnx
             return (*this)[index];
         }
 
+        /** @brief Returns the first element. @return Mutable first-element reference. @pre The container is not empty. */
         T& front()
         {
             return (*this)[0];
         }
 
+        /** @brief Returns the first element. @return Immutable first-element reference. @pre The container is not empty. */
         T const& front() const
         {
             return (*this)[0];
         }
 
+        /** @brief Returns the final element. @return Mutable final-element reference. @pre The container is not empty. */
         T& back()
         {
             return (*this)[m_size - 1];
         }
 
+        /** @brief Returns the final element. @return Immutable final-element reference. @pre The container is not empty. */
         T const& back() const
         {
             return (*this)[m_size - 1];
         }
 
+        /** @brief Replaces the contents with repeated copies. @param count Number of elements. @param value Value copied into every element. */
         void assign(std::size_t count, const T& value)
         {
             clear();
@@ -295,6 +335,13 @@ namespace rpnx
             }
         }
 
+        /**
+         * @brief Replaces the contents with an iterator range.
+         * @tparam InputIt Input iterator type.
+         * @param first First source element.
+         * @param last One-past-last source element.
+         * @pre The source range does not refer to elements of this container.
+         */
         template < typename InputIt, typename = std::enable_if_t< !std::is_integral_v< InputIt > > >
         void assign(InputIt first, InputIt last)
         {
@@ -309,11 +356,13 @@ namespace rpnx
             }
         }
 
+        /** @brief Replaces the contents from an initializer list. @param ilist Elements to copy. */
         void assign(std::initializer_list< T > ilist)
         {
             assign(ilist.begin(), ilist.end());
         }
 
+        /** @brief Destroys the final element. @pre The container is not empty. */
         void pop_back()
         {
             --m_size;
@@ -326,6 +375,10 @@ namespace rpnx
             element_alloc_traits::destroy(elem_alloc, &segment[sub_index]);
         }
 
+        /**
+         * @brief Releases segments that are not needed for the current size.
+         * @note Retained elements are not moved, so their references remain valid.
+         */
         void shrink_to_fit()
         {
             std::size_t required_segment_count = capacity_segment_count(m_size);
@@ -365,6 +418,7 @@ namespace rpnx
             }
         }
 
+        /** @brief Destroys all elements while retaining allocated segments. */
         void clear()
         {
             while (size() > 0)
@@ -373,17 +427,26 @@ namespace rpnx
             }
         }
 
+        /** @brief Destroys all elements and releases all allocated storage. */
         void reset()
         {
             clear();
             shrink_to_fit();
         }
 
+        /// Destroys all elements and releases all segments.
         ~segmented_dynar()
         {
             reset();
         }
 
+        /**
+         * @brief Constructs an element at the end of the container.
+         * @tparam Args Constructor argument types.
+         * @param args Arguments forwarded to `T`'s constructor.
+         * @return Reference to the constructed element.
+         * @note Existing element references remain valid.
+         */
         template < typename... Args >
         T& emplace_back(Args&&... args)
         {
@@ -406,6 +469,7 @@ namespace rpnx
             return segment[sub_index];
         }
 
+        /** @brief Move-constructs by taking ownership of all segments. @param other Source container, left empty. */
         segmented_dynar(segmented_dynar&& other) noexcept : m_size(other.m_size), m_capacity(other.m_capacity), m_segments(other.m_segments), m_alloc(std::move(other.m_alloc))
         {
             other.m_size = 0;
@@ -413,6 +477,7 @@ namespace rpnx
             other.m_segments = nullptr;
         }
 
+        /** @brief Move-assigns by taking ownership of all segments. @param other Source container, left empty. @return Reference to this container. */
         segmented_dynar& operator=(segmented_dynar&& other) noexcept
         {
             if (this != &other)
@@ -430,6 +495,7 @@ namespace rpnx
             return *this;
         }
 
+        /** @brief Copy-constructs every element. @param other Container to copy. */
         segmented_dynar(const segmented_dynar& other) : m_alloc(std::allocator_traits< Alloc >::select_on_container_copy_construction(other.m_alloc))
         {
             reserve(other.m_size);
@@ -439,6 +505,7 @@ namespace rpnx
             }
         }
 
+        /** @brief Copy-assigns every element subject to allocator propagation rules. @param other Container to copy. @return Reference to this container. */
         segmented_dynar& operator=(const segmented_dynar& other)
         {
             if (this != &other)
@@ -461,15 +528,28 @@ namespace rpnx
             return *this;
         }
 
+        /**
+         * @brief Random-access iterator over the segmented logical sequence.
+         * @tparam Const Whether dereference yields an immutable reference.
+         *
+         * The iterator is non-owning. It caches the current segment while using
+         * a global logical index for comparison and cross-segment movement.
+         */
         template < bool Const >
         class iterator_impl
         {
           public:
+            /// Iterator category for legacy algorithms.
             using iterator_category = std::random_access_iterator_tag;
+            /// Signed iterator-distance type.
             using difference_type = std::ptrdiff_t;
+            /// Iterated element type.
             using value_type = T;
+            /// Mutable or immutable element pointer type.
             using pointer = std::conditional_t< Const, T const*, T* >;
+            /// Mutable or immutable element reference type.
             using reference = std::conditional_t< Const, T const&, T& >;
+            /// Pointer to the mutable or immutable owning container.
             using container_ptr = std::conditional_t< Const, const segmented_dynar*, segmented_dynar* >;
 
           private:
@@ -499,8 +579,10 @@ namespace rpnx
             }
 
           public:
+            /// Constructs a singular iterator.
             iterator_impl() = default;
 
+            /** @brief Constructs an iterator at a logical index. @param container Container to reference. @param index Index in `[0, container->size()]`. */
             iterator_impl(container_ptr container, std::size_t index) : m_container(container), m_global_index(index)
             {
                 if (container && index < container->size())
@@ -509,20 +591,24 @@ namespace rpnx
                 }
             }
 
+            /** @brief Converts a mutable iterator to an immutable iterator. @tparam Const2 Source constness, required to be false. @param other Mutable iterator to copy. */
             template < bool Const2, typename = std::enable_if_t< Const && !Const2 > >
             iterator_impl(const iterator_impl< Const2 >& other) : m_container(other.m_container), m_global_index(other.m_global_index), m_ptr(other.m_ptr), m_seg_begin(other.m_seg_begin), m_seg_end(other.m_seg_end)
             {
             }
 
+            /** @brief Dereferences the current position. @return Element reference. @pre The iterator is dereferenceable. */
             reference operator*() const
             {
                 return *m_ptr;
             }
+            /** @brief Accesses the current element. @return Element pointer. @pre The iterator is dereferenceable. */
             pointer operator->() const
             {
                 return m_ptr;
             }
 
+            /** @brief Advances one element. @return Reference to this iterator. @pre The iterator is not at `end()`. */
             iterator_impl& operator++()
             {
                 ++m_ptr;
@@ -534,6 +620,7 @@ namespace rpnx
                 return *this;
             }
 
+            /** @brief Advances one element. @return Copy of the iterator before increment. @pre The iterator is not at `end()`. */
             iterator_impl operator++(int)
             {
                 iterator_impl temp = *this;
@@ -541,6 +628,7 @@ namespace rpnx
                 return temp;
             }
 
+            /** @brief Retreats one element. @return Reference to this iterator. @pre The iterator is not at `begin()`. */
             iterator_impl& operator--()
             {
                 if (m_ptr == m_seg_begin || m_global_index == m_container->size())
@@ -556,6 +644,7 @@ namespace rpnx
                 return *this;
             }
 
+            /** @brief Retreats one element. @return Copy of the iterator before decrement. @pre The iterator is not at `begin()`. */
             iterator_impl operator--(int)
             {
                 iterator_impl temp = *this;
@@ -563,6 +652,7 @@ namespace rpnx
                 return temp;
             }
 
+            /** @brief Moves by a signed offset. @param n Offset in elements. @return Reference to this iterator. @pre The resulting position belongs to the same container range. */
             iterator_impl& operator+=(difference_type n)
             {
                 if (n == 0)
@@ -589,11 +679,13 @@ namespace rpnx
                 return *this;
             }
 
+            /** @brief Moves backward by a signed offset. @param n Offset in elements. @return Reference to this iterator. @pre The resulting position belongs to the same container range. */
             iterator_impl& operator-=(difference_type n)
             {
                 return *this += (-n);
             }
 
+            /** @brief Returns an iterator moved by an offset. @param n Offset in elements. @return Shifted iterator. */
             iterator_impl operator+(difference_type n) const
             {
                 iterator_impl temp = *this;
@@ -601,6 +693,7 @@ namespace rpnx
                 return temp;
             }
 
+            /** @brief Returns an iterator moved backward by an offset. @param n Offset in elements. @return Shifted iterator. */
             iterator_impl operator-(difference_type n) const
             {
                 iterator_impl temp = *this;
@@ -608,67 +701,82 @@ namespace rpnx
                 return temp;
             }
 
+            /** @brief Computes distance from an immutable iterator. @param other Iterator in the same container. @return Signed index difference. */
             difference_type operator-(const iterator_impl< true >& other) const
             {
                 return static_cast< difference_type >(m_global_index) - static_cast< difference_type >(other.m_global_index);
             }
 
+            /** @brief Computes distance from a mutable iterator. @param other Iterator in the same container. @return Signed index difference. */
             difference_type operator-(const iterator_impl< false >& other) const
             {
                 return static_cast< difference_type >(m_global_index) - static_cast< difference_type >(other.m_global_index);
             }
 
+            /** @brief Dereferences an offset position. @param n Offset from this iterator. @return Element reference. */
             reference operator[](difference_type n) const
             {
                 return *(*this + n);
             }
 
+            /** @brief Compares with an immutable iterator for equality. @param other Iterator in the same container. @return Index comparison result. */
             bool operator==(const iterator_impl< true >& other) const
             {
                 return m_global_index == other.m_global_index;
             }
 
+            /** @brief Compares with a mutable iterator for equality. @param other Iterator in the same container. @return Index comparison result. */
             bool operator==(const iterator_impl< false >& other) const
             {
                 return m_global_index == other.m_global_index;
             }
 
+            /** @brief Compares with an immutable iterator for inequality. @param other Iterator in the same container. @return Index comparison result. */
             bool operator!=(const iterator_impl< true >& other) const
             {
                 return !(*this == other);
             }
+            /** @brief Compares with a mutable iterator for inequality. @param other Iterator in the same container. @return Index comparison result. */
             bool operator!=(const iterator_impl< false >& other) const
             {
                 return !(*this == other);
             }
+            /** @brief Tests whether this index precedes an immutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator<(const iterator_impl< true >& other) const
             {
                 return m_global_index < other.m_global_index;
             }
+            /** @brief Tests whether this index precedes a mutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator<(const iterator_impl< false >& other) const
             {
                 return m_global_index < other.m_global_index;
             }
+            /** @brief Tests whether this index follows an immutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator>(const iterator_impl< true >& other) const
             {
                 return m_global_index > other.m_global_index;
             }
+            /** @brief Tests whether this index follows a mutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator>(const iterator_impl< false >& other) const
             {
                 return m_global_index > other.m_global_index;
             }
+            /** @brief Tests whether this index does not follow an immutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator<=(const iterator_impl< true >& other) const
             {
                 return m_global_index <= other.m_global_index;
             }
+            /** @brief Tests whether this index does not follow a mutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator<=(const iterator_impl< false >& other) const
             {
                 return m_global_index <= other.m_global_index;
             }
+            /** @brief Tests whether this index does not precede an immutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator>=(const iterator_impl< true >& other) const
             {
                 return m_global_index >= other.m_global_index;
             }
+            /** @brief Tests whether this index does not precede a mutable iterator. @param other Iterator in the same container. @return Index comparison result. */
             bool operator>=(const iterator_impl< false >& other) const
             {
                 return m_global_index >= other.m_global_index;
@@ -678,29 +786,37 @@ namespace rpnx
             friend class segmented_dynar;
         };
 
+        /// Mutable random-access iterator type.
         using iterator = iterator_impl< false >;
+        /// Immutable random-access iterator type.
         using const_iterator = iterator_impl< true >;
 
+        /** @brief Returns an iterator to the first element. @return Mutable beginning iterator. */
         iterator begin()
         {
             return iterator(this, 0);
         }
+        /** @brief Returns an iterator one past the final element. @return Mutable end iterator. */
         iterator end()
         {
             return iterator(this, m_size);
         }
+        /** @brief Returns an immutable iterator to the first element. @return Immutable beginning iterator. */
         const_iterator begin() const
         {
             return const_iterator(this, 0);
         }
+        /** @brief Returns an immutable iterator one past the final element. @return Immutable end iterator. */
         const_iterator end() const
         {
             return const_iterator(this, m_size);
         }
+        /** @brief Returns an immutable iterator to the first element. @return Immutable beginning iterator. */
         const_iterator cbegin() const
         {
             return begin();
         }
+        /** @brief Returns an immutable iterator one past the final element. @return Immutable end iterator. */
         const_iterator cend() const
         {
             return end();

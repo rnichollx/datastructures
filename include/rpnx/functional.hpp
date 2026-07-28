@@ -24,6 +24,16 @@ namespace rpnx
     template < typename F >
     class const_function;
 
+    /**
+     * @brief Owning, copyable type-erased callable with small-buffer optimization.
+     *
+     * Empty functions compare equal to `nullptr` and throw
+     * `std::bad_function_call` when invoked. Small nothrow-copyable callables
+     * are stored inline; other callables are heap allocated.
+     *
+     * @tparam R Callable return type.
+     * @tparam Args Callable argument types.
+     */
     template < typename R, typename... Args >
     class function< R(Args...) >
     {
@@ -340,12 +350,22 @@ namespace rpnx
             m_impl_tbl->m_destroy(this);
         }
 
+        /**
+         * @brief Compile-time identity tag for a free function.
+         * @tparam fn Function identified by the tag.
+         */
         template < auto& fn >
         struct function_tag
         {
+            /// Function represented by this tag.
             static constexpr auto& id = fn;
         };
 
+        /**
+         * @brief Creates a compile-time identity tag for a free function.
+         * @tparam fn Function to identify.
+         * @return A stateless tag identifying `fn`.
+         */
         template < auto& fn >
         constexpr function_tag< fn > tag_of(decltype(fn)&)
         {
@@ -354,6 +374,11 @@ namespace rpnx
 
         // Optional convenience: accept a function lvalue reference and forward to tag_of
 
+        /**
+         * @brief Constructs a function from a compatible callable.
+         * @tparam Functor Callable source type.
+         * @param f Callable to own.
+         */
         template < typename Functor, typename = std::enable_if_t< !std::is_same_v< std::decay_t< Functor >, function > > >
         function(Functor&& f) noexcept(use_sbo< std::decay_t< Functor > >())
         {
@@ -375,16 +400,19 @@ namespace rpnx
             }
         }
 
+        /** @brief Copy-constructs a function and its stored callable. @param other Function to copy. */
         function(function const& other)
         {
             other.m_impl_tbl->m_copy_ctor(this, &other);
         }
 
+        /** @brief Move-constructs a function, leaving `other` empty when it owns heap storage. @param other Function to move. */
         function(function&& other) noexcept
         {
             other.m_impl_tbl->m_move_ctor(this, &other);
         }
 
+        /** @brief Copy-assigns a function and its stored callable. @param other Function to copy. @return Reference to this function. */
         function& operator=(function const& other)
         {
             if (this == &other)
@@ -395,6 +423,7 @@ namespace rpnx
             return *this;
         }
 
+        /** @brief Move-assigns a function. @param other Function to move. @return Reference to this function. */
         function& operator=(function&& other) noexcept
         {
             if (this == &other)
@@ -405,16 +434,24 @@ namespace rpnx
             return *this;
         }
 
+        /** @brief Tests whether a callable is stored. @return `true` when invocation is valid. */
         operator bool() const noexcept
         {
             return m_callable != &null_call_impl;
         }
 
+        /**
+         * @brief Invokes the stored callable.
+         * @param args Arguments forwarded according to the function signature.
+         * @return The callable result when `R` is non-void.
+         * @throws std::bad_function_call if the function is empty.
+         */
         R operator()(Args... args)
         {
             return m_callable(this, std::forward< Args >(args)...);
         }
 
+        /** @brief Tests whether the function is empty. @return `true` when no callable is stored. */
         bool operator==(std::nullptr_t) const noexcept
         {
             return m_callable == &null_call_impl;

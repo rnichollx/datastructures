@@ -6,13 +6,23 @@
 #error "not implemented"
 #include "segmented_dynar.hpp"
 
-#include <__new/interference_size.h>
 #include <algorithm>
 #include <array>
 #include <utility>
 
 namespace rpnx
 {
+    /**
+     * @brief Reserved prototype for a hadix map.
+     *
+     * This type is not yet fully implemented, including this file is an error.
+     *
+     * @tparam K Key type.
+     * @tparam V Mapped value type.
+     * @tparam Hash Hash function for keys.
+     * @tparam KeyEqual Equality predicate for keys.
+     * @tparam Alloc Allocator for key-value storage.
+     */
     template < typename K, typename V, typename Hash = std::hash< K >, typename KeyEqual = std::equal_to< K >, typename Alloc = std::allocator< std::pair< const K, V > > >
     class hadix_table
     {

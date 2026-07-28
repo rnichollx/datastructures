@@ -58,6 +58,12 @@ namespace rpnx
             }
         }
 
+        /**
+         * @brief Returns the stored value from an lvalue result.
+         * @return A mutable reference to the stored value.
+         * @throws The stored exception when the result contains an error.
+         * @pre The result contains a value or an error.
+         */
         T & get() &
         {
             if (er)
@@ -70,6 +76,7 @@ namespace rpnx
             return t.value();
         }
 
+        /** @copydoc get() & */
         T const & get() const &
         {
             if (er)
@@ -82,6 +89,12 @@ namespace rpnx
             return t.value();
         }
 
+        /**
+         * @brief Returns the stored value from an rvalue result.
+         * @return An rvalue reference to the stored value.
+         * @throws The stored exception when the result contains an error.
+         * @pre The result contains a value or an error.
+         */
         T && get() &&
         {
             if (er)
@@ -94,6 +107,7 @@ namespace rpnx
             return std::move(t.value());
         }
 
+        /** @copydoc get() && */
         T const && get() const &&
         {
             if (er)
@@ -106,21 +120,25 @@ namespace rpnx
             return std::move(t.value());
         }
 
+        /** @brief Alias for `get()`. @return A mutable reference to the stored value. */
         T & value() &
         {
             return get();
         }
 
+        /** @brief Alias for `get()`. @return An immutable reference to the stored value. */
         T const & value() const &
         {
             return get();
         }
 
+        /** @brief Alias for rvalue-qualified `get()`. @return An rvalue reference to the stored value. */
         T && value() &&
         {
             return std::move(*this).get();
         }
 
+        /** @brief Alias for const rvalue-qualified `get()`. @return An immutable rvalue reference to the stored value. */
         T const && value() const &&
         {
             return std::move(*this).get();
@@ -146,6 +164,7 @@ namespace rpnx
             this->er = er;
         }
 
+        /** @brief Alias for `set_error()`. @param er Exception to store. */
         void set_exception(std::exception_ptr er)
         {
             set_error(er);
@@ -178,6 +197,7 @@ namespace rpnx
             return er != nullptr;
         }
 
+        /** @brief Alias for `has_error()`. @return `true` if an exception is stored. */
         bool has_exception() const
         {
             return has_error();
@@ -253,6 +273,7 @@ namespace rpnx
             return;
         }
 
+        /** @brief Alias for `get()`. @throws The stored exception or `std::logic_error` when incomplete. */
         void value() const
         {
             get();
@@ -277,6 +298,7 @@ namespace rpnx
             this->er = er;
         }
 
+        /** @brief Alias for `set_error()`. @param er Exception to store. */
         void set_exception(std::exception_ptr er)
         {
             set_error(er);
@@ -300,6 +322,7 @@ namespace rpnx
             return er != nullptr;
         }
 
+        /** @brief Alias for `has_error()`. @return `true` if an exception is stored. */
         bool has_exception() const
         {
             return has_error();

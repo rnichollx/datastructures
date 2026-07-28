@@ -327,6 +327,7 @@ namespace rpnx
 
         /**
          * @brief Returns a pointer to the contained value.
+         * @return Pointer to the contained value.
          * @pre `has_value()` is true.
          */
         constexpr T const* operator->() const noexcept
@@ -336,6 +337,7 @@ namespace rpnx
 
         /**
          * @brief Returns a pointer to the contained value.
+         * @return Pointer to the contained value.
          * @pre `has_value()` is true.
          */
         constexpr T* operator->() noexcept
@@ -345,6 +347,7 @@ namespace rpnx
 
         /**
          * @brief Returns a const lvalue reference to the contained value.
+         * @return Immutable reference to the contained value.
          * @pre `has_value()` is true.
          */
         constexpr T const& operator*() const& noexcept
@@ -354,6 +357,7 @@ namespace rpnx
 
         /**
          * @brief Returns an lvalue reference to the contained value.
+         * @return Mutable reference to the contained value.
          * @pre `has_value()` is true.
          */
         constexpr T& operator*() & noexcept
@@ -363,6 +367,7 @@ namespace rpnx
 
         /**
          * @brief Returns a const rvalue reference to the contained value.
+         * @return Immutable rvalue reference to the contained value.
          * @pre `has_value()` is true.
          */
         constexpr T const&& operator*() const&& noexcept
@@ -372,6 +377,7 @@ namespace rpnx
 
         /**
          * @brief Returns an rvalue reference to the contained value.
+         * @return Rvalue reference to the contained value.
          * @pre `has_value()` is true.
          */
         constexpr T&& operator*() && noexcept
@@ -381,6 +387,7 @@ namespace rpnx
 
         /**
          * @brief Tests whether the annex contains a value.
+         * @return `true` if a value is present.
          */
         constexpr explicit operator bool() const noexcept
         {
@@ -398,6 +405,7 @@ namespace rpnx
 
         /**
          * @brief Returns the contained value.
+         * @return Mutable reference to the contained value.
          * @throws std::bad_optional_access if no value is present.
          */
         T& value() &
@@ -412,6 +420,7 @@ namespace rpnx
 
         /**
          * @brief Returns the contained value.
+         * @return Immutable reference to the contained value.
          * @throws std::bad_optional_access if no value is present.
          */
         T const& value() const&
@@ -426,6 +435,7 @@ namespace rpnx
 
         /**
          * @brief Returns the contained value as an rvalue reference.
+         * @return Rvalue reference to the contained value.
          * @throws std::bad_optional_access if no value is present.
          */
         T&& value() &&
@@ -440,6 +450,7 @@ namespace rpnx
 
         /**
          * @brief Returns the contained value as a const rvalue reference.
+         * @return Immutable rvalue reference to the contained value.
          * @throws std::bad_optional_access if no value is present.
          */
         T const&& value() const&&
@@ -549,6 +560,7 @@ namespace rpnx
 
         /**
          * @brief Returns a copy of the allocator.
+         * @return Allocator used for contained-value storage.
          */
         allocator_type get_allocator() const
         {
@@ -558,6 +570,8 @@ namespace rpnx
 
     /**
      * @brief Swaps two annex objects.
+     * @param lhs First annex.
+     * @param rhs Second annex.
      */
     template < typename T, typename Alloc >
     void swap(annex< T, Alloc >& lhs, annex< T, Alloc >& rhs) noexcept(noexcept(lhs.swap(rhs)))
@@ -576,6 +590,9 @@ namespace rpnx
 
     /**
      * @brief Compares two annex objects for equality.
+     * @param lhs Left operand.
+     * @param rhs Right operand.
+     * @return `true` when both are empty or contain equal values.
      */
     template < typename T, typename Alloc >
     bool operator==(annex< T, Alloc > const& lhs, annex< T, Alloc > const& rhs)
@@ -590,6 +607,9 @@ namespace rpnx
 
     /**
      * @brief Compares two annex objects for inequality.
+     * @param lhs Left operand.
+     * @param rhs Right operand.
+     * @return Negation of equality.
      */
     template < typename T, typename Alloc >
     bool operator!=(annex< T, Alloc > const& lhs, annex< T, Alloc > const& rhs)
@@ -599,6 +619,9 @@ namespace rpnx
 
     /**
      * @brief Orders two annex objects.
+     * @param lhs Left operand.
+     * @param rhs Right operand.
+     * @return `true` when `lhs` orders before `rhs`.
      */
     template < typename T, typename Alloc >
     bool operator<(annex< T, Alloc > const& lhs, annex< T, Alloc > const& rhs)
@@ -608,6 +631,9 @@ namespace rpnx
 
     /**
      * @brief Orders two annex objects.
+     * @param lhs Left operand.
+     * @param rhs Right operand.
+     * @return `true` when `lhs` orders after `rhs`.
      */
     template < typename T, typename Alloc >
     bool operator>(annex< T, Alloc > const& lhs, annex< T, Alloc > const& rhs)
@@ -617,6 +643,9 @@ namespace rpnx
 
     /**
      * @brief Orders two annex objects.
+     * @param lhs Left operand.
+     * @param rhs Right operand.
+     * @return `true` when `lhs` does not order after `rhs`.
      */
     template < typename T, typename Alloc >
     bool operator<=(annex< T, Alloc > const& lhs, annex< T, Alloc > const& rhs)
@@ -626,6 +655,9 @@ namespace rpnx
 
     /**
      * @brief Orders two annex objects.
+     * @param lhs Left operand.
+     * @param rhs Right operand.
+     * @return `true` when `lhs` does not order before `rhs`.
      */
     template < typename T, typename Alloc >
     bool operator>=(annex< T, Alloc > const& lhs, annex< T, Alloc > const& rhs)
@@ -635,6 +667,9 @@ namespace rpnx
 
     /**
      * @brief Three-way compares two annex objects when `T` supports `<=>`.
+     * @param lhs Left operand.
+     * @param rhs Right operand.
+     * @return Contained-value ordering, with empty ordered before engaged.
      */
     template < typename T, typename Alloc >
         requires requires(T const& lhs, T const& rhs) { lhs <=> rhs; }
@@ -670,6 +705,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether an annex is empty.
+     * @param lhs Annex to test.
+     * @return `true` when `lhs` is empty.
      */
     template < typename T, typename Alloc >
     bool operator==(annex< T, Alloc > const& lhs, std::nullopt_t) noexcept
@@ -679,6 +716,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether an annex is empty.
+     * @param rhs Annex to test.
+     * @return `true` when `rhs` is empty.
      */
     template < typename T, typename Alloc >
     bool operator==(std::nullopt_t, annex< T, Alloc > const& rhs) noexcept
@@ -688,6 +727,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether an annex contains a value.
+     * @param lhs Annex to test.
+     * @return `true` when `lhs` is engaged.
      */
     template < typename T, typename Alloc >
     bool operator!=(annex< T, Alloc > const& lhs, std::nullopt_t) noexcept
@@ -697,6 +738,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether an annex contains a value.
+     * @param rhs Annex to test.
+     * @return `true` when `rhs` is engaged.
      */
     template < typename T, typename Alloc >
     bool operator!=(std::nullopt_t, annex< T, Alloc > const& rhs) noexcept
@@ -706,6 +749,7 @@ namespace rpnx
 
     /**
      * @brief Returns false because an annex is never less than `std::nullopt`.
+     * @return Always `false`.
      */
     template < typename T, typename Alloc >
     bool operator<(annex< T, Alloc > const&, std::nullopt_t) noexcept
@@ -715,6 +759,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether `std::nullopt` is less than an annex.
+     * @param rhs Annex to test.
+     * @return `true` when `rhs` is engaged.
      */
     template < typename T, typename Alloc >
     bool operator<(std::nullopt_t, annex< T, Alloc > const& rhs) noexcept
@@ -724,6 +770,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether an annex is less than or equal to `std::nullopt`.
+     * @param lhs Annex to test.
+     * @return `true` when `lhs` is empty.
      */
     template < typename T, typename Alloc >
     bool operator<=(annex< T, Alloc > const& lhs, std::nullopt_t) noexcept
@@ -733,6 +781,7 @@ namespace rpnx
 
     /**
      * @brief Returns true because `std::nullopt` is less than or equal to any annex.
+     * @return Always `true`.
      */
     template < typename T, typename Alloc >
     bool operator<=(std::nullopt_t, annex< T, Alloc > const&) noexcept
@@ -742,6 +791,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether an annex is greater than `std::nullopt`.
+     * @param lhs Annex to test.
+     * @return `true` when `lhs` is engaged.
      */
     template < typename T, typename Alloc >
     bool operator>(annex< T, Alloc > const& lhs, std::nullopt_t) noexcept
@@ -751,6 +802,7 @@ namespace rpnx
 
     /**
      * @brief Returns false because `std::nullopt` is never greater than an annex.
+     * @return Always `false`.
      */
     template < typename T, typename Alloc >
     bool operator>(std::nullopt_t, annex< T, Alloc > const&) noexcept
@@ -760,6 +812,7 @@ namespace rpnx
 
     /**
      * @brief Returns true because any annex is greater than or equal to `std::nullopt`.
+     * @return Always `true`.
      */
     template < typename T, typename Alloc >
     bool operator>=(annex< T, Alloc > const&, std::nullopt_t) noexcept
@@ -769,6 +822,8 @@ namespace rpnx
 
     /**
      * @brief Tests whether `std::nullopt` is greater than or equal to an annex.
+     * @param rhs Annex to test.
+     * @return `true` when `rhs` is empty.
      */
     template < typename T, typename Alloc >
     bool operator>=(std::nullopt_t, annex< T, Alloc > const& rhs) noexcept
@@ -778,6 +833,8 @@ namespace rpnx
 
     /**
      * @brief Three-way compares an annex with `std::nullopt`.
+     * @param lhs Annex to compare.
+     * @return Equal when empty, greater when engaged.
      */
     template < typename T, typename Alloc >
     std::strong_ordering operator<=>(annex< T, Alloc > const& lhs, std::nullopt_t) noexcept
@@ -787,6 +844,8 @@ namespace rpnx
 
     /**
      * @brief Three-way compares `std::nullopt` with an annex.
+     * @param rhs Annex to compare.
+     * @return Equal when empty, less when engaged.
      */
     template < typename T, typename Alloc >
     std::strong_ordering operator<=>(std::nullopt_t, annex< T, Alloc > const& rhs) noexcept
@@ -806,6 +865,9 @@ namespace rpnx
 
     /**
      * @brief Compares an annex with a raw value for equality.
+     * @param lhs Annex operand.
+     * @param rhs Raw-value operand.
+     * @return `true` when engaged and equal.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -816,6 +878,9 @@ namespace rpnx
 
     /**
      * @brief Compares a raw value with an annex for equality.
+     * @param lhs Raw-value operand.
+     * @param rhs Annex operand.
+     * @return `true` when engaged and equal.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -826,6 +891,9 @@ namespace rpnx
 
     /**
      * @brief Compares an annex with a raw value for inequality.
+     * @param lhs Annex operand.
+     * @param rhs Raw-value operand.
+     * @return Negation of equality.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -836,6 +904,9 @@ namespace rpnx
 
     /**
      * @brief Compares a raw value with an annex for inequality.
+     * @param lhs Raw-value operand.
+     * @param rhs Annex operand.
+     * @return Negation of equality.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -846,6 +917,9 @@ namespace rpnx
 
     /**
      * @brief Orders an annex and a raw value.
+     * @param lhs Annex operand.
+     * @param rhs Raw-value operand.
+     * @return `true` when `lhs` orders before `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -856,6 +930,9 @@ namespace rpnx
 
     /**
      * @brief Orders a raw value and an annex.
+     * @param lhs Raw-value operand.
+     * @param rhs Annex operand.
+     * @return `true` when `lhs` orders before `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -866,6 +943,9 @@ namespace rpnx
 
     /**
      * @brief Orders an annex and a raw value.
+     * @param lhs Annex operand.
+     * @param rhs Raw-value operand.
+     * @return `true` when `lhs` does not order after `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -876,6 +956,9 @@ namespace rpnx
 
     /**
      * @brief Orders a raw value and an annex.
+     * @param lhs Raw-value operand.
+     * @param rhs Annex operand.
+     * @return `true` when `lhs` does not order after `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -886,6 +969,9 @@ namespace rpnx
 
     /**
      * @brief Orders an annex and a raw value.
+     * @param lhs Annex operand.
+     * @param rhs Raw-value operand.
+     * @return `true` when `lhs` orders after `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -896,6 +982,9 @@ namespace rpnx
 
     /**
      * @brief Orders a raw value and an annex.
+     * @param lhs Raw-value operand.
+     * @param rhs Annex operand.
+     * @return `true` when `lhs` orders after `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -906,6 +995,9 @@ namespace rpnx
 
     /**
      * @brief Orders an annex and a raw value.
+     * @param lhs Annex operand.
+     * @param rhs Raw-value operand.
+     * @return `true` when `lhs` does not order before `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -916,6 +1008,9 @@ namespace rpnx
 
     /**
      * @brief Orders a raw value and an annex.
+     * @param lhs Raw-value operand.
+     * @param rhs Annex operand.
+     * @return `true` when `lhs` does not order before `rhs`.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >)
@@ -926,6 +1021,9 @@ namespace rpnx
 
     /**
      * @brief Three-way compares an annex with a raw value when supported.
+     * @param lhs Annex operand.
+     * @param rhs Raw-value operand.
+     * @return Contained-value ordering, or less when `lhs` is empty.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >) && requires(T const& lhs, U const& rhs) { lhs <=> rhs; }
@@ -941,6 +1039,9 @@ namespace rpnx
 
     /**
      * @brief Three-way compares a raw value with an annex when supported.
+     * @param lhs Raw-value operand.
+     * @param rhs Annex operand.
+     * @return Contained-value ordering, or greater when `rhs` is empty.
      */
     template < typename T, typename Alloc, typename U >
         requires(!requires { typename U::value_type; typename U::allocator_type; } || !std::is_same_v< U, annex< typename U::value_type, typename U::allocator_type > >) && requires(U const& lhs, T const& rhs) { lhs <=> rhs; }
@@ -960,6 +1061,7 @@ namespace rpnx
      * @brief Constructs an annex containing a decayed copy of a value.
      * @tparam T Source value type.
      * @param value Value used to construct the annex.
+     * @return Engaged annex containing the forwarded value.
      */
     template < typename T >
     annex< std::decay_t< T > > make_annex(T&& value)
@@ -972,6 +1074,7 @@ namespace rpnx
      * @tparam T Contained value type.
      * @tparam Args Constructor argument types for `T`.
      * @param args Arguments forwarded to `T`.
+     * @return Engaged annex containing the constructed value.
      */
     template < typename T, typename... Args >
     annex< T > make_annex(Args&&... args)
@@ -986,6 +1089,7 @@ namespace rpnx
      * @tparam Args Additional constructor argument types for `T`.
      * @param init Initializer list forwarded to `T`.
      * @param args Additional arguments forwarded to `T`.
+     * @return Engaged annex containing the constructed value.
      */
     template < typename T, typename U, typename... Args >
     annex< T > make_annex(std::initializer_list< U > init, Args&&... args)
