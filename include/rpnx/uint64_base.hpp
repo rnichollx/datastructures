@@ -4,6 +4,9 @@
 #define RPNX_DATASTRUCTURES_RPNX_UINT64_BASE_HPP
 
 #include <cstdint>
+#include <string>
+#include <tuple>
+#include <vector>
 
 namespace rpnx
 {

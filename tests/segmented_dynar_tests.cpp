@@ -18,8 +18,58 @@
 #include "rpnx/segmented_dynar.hpp"
 #include "tracking_allocator.hpp"
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <numeric>
+#include <stdexcept>
+
+namespace
+{
+    struct copy_only_value
+    {
+        int value;
+
+        explicit copy_only_value(int value) : value(value)
+        {
+        }
+
+        copy_only_value(copy_only_value const&) = default;
+        copy_only_value(copy_only_value&&) = delete;
+    };
+
+    struct throwing_copy_value
+    {
+        static int live_count;
+        static int copies_before_throw;
+
+        int value;
+
+        explicit throwing_copy_value(int value) : value(value)
+        {
+            ++live_count;
+        }
+
+        throwing_copy_value(throwing_copy_value const& other) : value(other.value)
+        {
+            if (copies_before_throw == 0)
+            {
+                throw std::runtime_error("copy failed");
+            }
+            --copies_before_throw;
+            ++live_count;
+        }
+
+        ~throwing_copy_value()
+        {
+            --live_count;
+        }
+    };
+
+    int throwing_copy_value::live_count = 0;
+    int throwing_copy_value::copies_before_throw = 0;
+} // namespace
+
+static_assert(std::random_access_iterator< rpnx::segmented_dynar< int >::iterator >);
 
 TEST(segmented_dynar, construct_empty)
 {
@@ -42,6 +92,16 @@ TEST(segmented_dynar, push_back_and_access)
     EXPECT_EQ(arr[2], 30);
     EXPECT_EQ(arr[3], 40);
     EXPECT_EQ(arr[4], 50);
+}
+
+TEST(segmented_dynar, push_back_accepts_copy_only_values)
+{
+    rpnx::segmented_dynar< copy_only_value > arr;
+    copy_only_value value(42);
+
+    arr.push_back(value);
+
+    EXPECT_EQ(arr.front().value, 42);
 }
 
 TEST(segmented_dynar, at_out_of_range)
@@ -235,6 +295,24 @@ TEST(segmented_dynar, copy_constructor_and_assignment)
     }
 }
 
+TEST(segmented_dynar, copy_constructor_cleans_up_after_element_copy_throws)
+{
+    throwing_copy_value::live_count = 0;
+    throwing_copy_value::copies_before_throw = 1;
+
+    {
+        rpnx::segmented_dynar< throwing_copy_value > source;
+        source.emplace_back(1);
+        source.emplace_back(2);
+        source.emplace_back(3);
+
+        EXPECT_THROW((rpnx::segmented_dynar< throwing_copy_value >(source)), std::runtime_error);
+        EXPECT_EQ(throwing_copy_value::live_count, 3);
+    }
+
+    EXPECT_EQ(throwing_copy_value::live_count, 0);
+}
+
 TEST(segmented_dynar, reserve_leak_on_exception)
 {
     using Alloc = testutils::failing_allocator< int >;
@@ -277,6 +355,24 @@ TEST(segmented_dynar, allocator_non_propagation_copy_assignment)
     c2 = c1;
     // Should NOT propagate
     EXPECT_EQ(c2.get_allocator().id, 2);
+}
+
+TEST(segmented_dynar, allocator_non_propagation_move_assignment)
+{
+    using allocator_type = testutils::non_propagate_allocator< int >;
+    rpnx::segmented_dynar< int, allocator_type > source(allocator_type(1));
+    rpnx::segmented_dynar< int, allocator_type > destination(allocator_type(2));
+    source.push_back(10);
+    source.push_back(20);
+    destination.push_back(30);
+
+    destination = std::move(source);
+
+    EXPECT_EQ(destination.get_allocator().id, 2);
+    ASSERT_EQ(destination.size(), 2);
+    EXPECT_EQ(destination[0], 10);
+    EXPECT_EQ(destination[1], 20);
+    EXPECT_EQ(source.size(), 0);
 }
 
 TEST(segmented_dynar, allocator_copy_construction)
@@ -363,6 +459,9 @@ TEST(segmented_dynar, iterator_random_access_arithmetic)
     auto it2 = it + 400;
     EXPECT_EQ(it2 - it, 400);
     EXPECT_EQ(it - it2, -400);
+
+    rpnx::segmented_dynar< int >::iterator leading_offset = 25 + arr.begin();
+    EXPECT_EQ(*leading_offset, 25);
 }
 
 TEST(segmented_dynar, iterator_subscript_operator)

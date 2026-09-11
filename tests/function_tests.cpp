@@ -8,6 +8,37 @@
 #include "test_utils.hpp"
 #include <cstddef>
 #include <functional>
+#include <stdexcept>
+
+namespace
+{
+    struct throwing_move_callable
+    {
+        throwing_move_callable() = default;
+        throwing_move_callable(throwing_move_callable const&) noexcept = default;
+        throwing_move_callable& operator=(throwing_move_callable const&) noexcept = default;
+
+        throwing_move_callable(throwing_move_callable&&)
+        {
+            throw std::runtime_error("move failed");
+        }
+
+        int operator()()
+        {
+            return 17;
+        }
+    };
+
+    struct lvalue_only_callable
+    {
+        int operator()() &
+        {
+            return 23;
+        }
+
+        int operator()() && = delete;
+    };
+} // namespace
 
 TEST(function, rpnx_function_default_ctor)
 {
@@ -67,6 +98,28 @@ TEST(function, rpnx_function_move)
     EXPECT_FALSE(f1);
     EXPECT_EQ(f2(), 1);
     EXPECT_THROW(f1(), std::bad_function_call);
+}
+
+TEST(function, throwing_move_callable_is_stored_out_of_line)
+{
+    throwing_move_callable callable;
+    rpnx::function< int() > source(callable);
+
+    rpnx::function< int() > destination(std::move(source));
+
+    EXPECT_FALSE(source);
+    EXPECT_EQ(destination(), 17);
+}
+
+TEST(function, callable_construction_propagates_a_throwing_move)
+{
+    EXPECT_THROW((rpnx::function< int() >(throwing_move_callable())), std::runtime_error);
+}
+
+TEST(function, accepts_callables_invocable_only_as_lvalues)
+{
+    rpnx::function< int() > stored_function{lvalue_only_callable()};
+    EXPECT_EQ(stored_function(), 23);
 }
 
 TEST(function, rpnx_function_non_sbo)

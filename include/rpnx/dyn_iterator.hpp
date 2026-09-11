@@ -389,7 +389,7 @@ namespace rpnx
     {
         struct iterator_vtable
         {
-            using get_value_f = V const& (*)(void* self);
+            using get_value_f = V (*)(void* self);
             using copy_f = void* (*)(void const* self);
             using advance_f = void (*)(void* self);
             using recede_f = void (*)(void* self);
@@ -409,7 +409,7 @@ namespace rpnx
 
         template < typename T >
         static constexpr iterator_vtable vtable = {
-            .v_get_value = [](void* self) -> V const&
+            .v_get_value = [](void* self) -> V
             {
                 return **static_cast< T* >(self);
             },

@@ -16,7 +16,7 @@
 
 namespace rpnx
 {
-
+    /// @cond INTERNAL_IMPLEMENTATION
     template < typename T, typename... Ts >
     struct index_of;
 
@@ -235,6 +235,7 @@ namespace rpnx
             }
         }
     };
+    /// @endcond
 
     /**
      * @brief Convenience alias for a variant using `std::allocator<void>`.
@@ -257,17 +258,17 @@ namespace rpnx
         return v.template get_as< T >();
     }
 
-    /** @brief Policy used when a visitor cannot accept an active alternative. */
+    /// @cond INTERNAL_IMPLEMENTATION
     enum class call_type { required, /**< Require every alternative to be invocable at compile time. */ optional, /**< Skip alternatives for which the visitor is not invocable. */ except_on_missing /**< Throw when the active alternative is not invocable. */ };
+    /// @endcond
 
     /** @brief Strategy used to dispatch a visitor to an active alternative. */
     enum class dispatch_type { automatic, /**< Select a dispatch strategy from the variant shape. */ branching, /**< Use a compile-time binary branch tree. */ indirect /**< Use a table of erased function pointers. */ };
 
-    /** @brief Invokes a visitor for one compile-time alternative index. @tparam V Variant argument type. @tparam F Visitor type. @tparam R Result type. @tparam N Alternative index. @tparam C Missing-call policy. @param variant Variant to visit. @param func Visitor to invoke. @return Visitor result when `R` is non-void. */
+    /// @cond INTERNAL_IMPLEMENTATION
     template < typename V, typename F, typename R, std::size_t N, call_type C >
     inline R apply_nth_visitor(V&& variant, F&& func);
 
-    /** @brief Dispatches an alternative index through a compile-time binary branch tree. @tparam NBegin First candidate index. @tparam NEnd One-past-last candidate index. @tparam V Variant argument type. @tparam F Visitor type. @tparam R Result type. @tparam C Missing-call policy. @param index Active alternative index. @param variant Variant to visit. @param func Visitor to invoke. @return Visitor result when `R` is non-void. */
     template < std::size_t NBegin, std::size_t NEnd, typename V, typename F, typename R, call_type C >
     inline R apply_nth_visitor_branched(std::size_t index, V&& variant, F&& func)
     {
@@ -294,7 +295,6 @@ namespace rpnx
         }
     }
 
-    /** @brief Invokes a visitor for one compile-time alternative index. @tparam V Variant argument type. @tparam F Visitor type. @tparam R Result type. @tparam N Alternative index. @tparam C Missing-call policy. @param variant Variant to visit. @param func Visitor to invoke. @return Visitor result when `R` is non-void. */
     template < typename V, typename F, typename R, std::size_t N, call_type C >
     inline R apply_nth_visitor(V&& variant, F&& func)
     {
@@ -350,21 +350,9 @@ namespace rpnx
         }
     }
 
-    /** @brief Function-pointer type for one erased visitor dispatch entry. @tparam V Variant argument type. @tparam F Visitor type. @tparam R Result type. */
     template < typename V, typename F, typename R >
     using variant_invoke_executor = R (*)(V&&, F&&);
-
-    /** @brief Generates the legacy lvalue visitor dispatch table. @tparam F Visitor type. @tparam R Result type. @tparam A Allocator type. @tparam Vs Alternative types. @return Compile-time dispatch table. */
-    template < typename F, typename R, typename A, typename... Vs >
-    auto consteval variant_invoke_table_gen()
-    {
-        using vexecptr = variant_invoke_executor< rpnx::basic_variant< A, Vs... >&, F, R >;
-        std::array< vexecptr, std::tuple_size_v< std::tuple< Vs... > > > result{};
-
-        update_variant_invoke_table_lvalue< 0, F, R, A, Vs... >(result);
-
-        return result;
-    }
+    /// @endcond
 
     /** @brief Obtains an alternative type by index. @tparam V Variant type. @tparam N Zero-based alternative index. */
     template < typename V, std::size_t N >
@@ -402,11 +390,10 @@ namespace rpnx
     template < typename V, std::size_t N >
     using variant_nth_member_t = typename variant_nth_member< V, N >::type;
 
-    /** @brief Populates visitor dispatch-table entries recursively. @tparam N Entry index. @tparam F Visitor type. @tparam R Result type. @tparam V Variant argument type. @tparam C Missing-call policy. @param table Table to populate. */
+    /// @cond INTERNAL_IMPLEMENTATION
     template < std::size_t N, typename F, typename R, typename V, call_type C >
     constexpr void update_variant_invoke_table2(std::array< variant_invoke_executor< V, F, R >, variant_size_v< std::remove_cvref_t< V > > >& table);
 
-    /** @brief Generates a visitor dispatch table. @tparam F Visitor type. @tparam R Result type. @tparam V Variant argument type. @tparam C Missing-call policy. @return Compile-time dispatch table. */
     template < typename F, typename R, typename V, call_type C >
     auto constexpr variant_invoke_table_gen2()
     {
@@ -418,7 +405,6 @@ namespace rpnx
         return result;
     }
 
-    /** @brief Populates visitor dispatch-table entries recursively. @tparam N Entry index. @tparam F Visitor type. @tparam R Result type. @tparam V Variant argument type. @tparam C Missing-call policy. @param table Table to populate. */
     template < std::size_t N, typename F, typename R, typename V, call_type C >
     constexpr void update_variant_invoke_table2(std::array< variant_invoke_executor< V, F, R >, variant_size_v< std::remove_cvref_t< V > > >& table)
     {
@@ -432,9 +418,9 @@ namespace rpnx
         }
     }
 
-    /** @brief Shared compile-time visitor dispatch table. @tparam F Visitor type. @tparam R Result type. @tparam V Variant argument type. @tparam C Missing-call policy. */
     template < typename F, typename R, typename V, call_type C >
     inline constexpr auto variant_invoke_table2 = variant_invoke_table_gen2< F, R, V, C >();
+    /// @endcond
 
     /**
      * @brief Invokes a visitor for the active alternative.
@@ -486,22 +472,16 @@ namespace rpnx
         return variant_invoke_table2< F, R, V&&, call_type::optional >[variant.index()](std::forward< V >(variant), std::forward< F >(func));
     }
 
-    /**
-     * @brief Visitor that assigns its argument into a target variant.
-     * @tparam A Target allocator type.
-     * @tparam Ts Target alternative types.
-     */
+    /// @cond INTERNAL_IMPLEMENTATION
     template < typename A, typename... Ts >
     class variant_convert_to
     {
         basic_variant< A, Ts... >& m_val;
 
       public:
-        /** @brief Binds the assignment target. @param val Variant updated by visitor calls. */
         variant_convert_to(basic_variant< A, Ts... >& val) : m_val(val)
         {
         }
-        /** @brief Assigns a visited value into the target. @tparam T2 Visited value type. @param other Value to forward. @return Always `true`. */
         template < typename T2 >
         bool operator()(T2&& other) const
         {
@@ -509,6 +489,7 @@ namespace rpnx
             return true;
         }
     };
+    /// @endcond
 
     /**
      * @brief Heap-backed tagged union with allocator-aware storage.
@@ -863,8 +844,8 @@ namespace rpnx
         {
             assert(valid());
 
-            m_alloc = other.m_alloc;
-
+            using std::swap;
+            swap(m_alloc, other.m_alloc);
             std::swap(m_vinf, other.m_vinf);
             std::swap(m_data, other.m_data);
 

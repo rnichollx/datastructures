@@ -297,6 +297,16 @@ TEST(dyn_bidirectional_input_iter, dereference)
     EXPECT_EQ(*iter, 1);
 }
 
+TEST(dyn_bidirectional_input_iter, dereferences_proxy_iterators_by_value)
+{
+    std::vector< bool > vec{true, false};
+    rpnx::dyn_bidirectional_input_iter< bool > iter(vec.begin());
+
+    EXPECT_TRUE(*iter);
+    ++iter;
+    EXPECT_FALSE(*iter);
+}
+
 TEST(dyn_bidirectional_input_iter, preincrement)
 {
     std::vector< int > vec{1, 2, 3, 4, 5};

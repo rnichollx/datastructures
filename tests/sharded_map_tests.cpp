@@ -21,6 +21,27 @@
 #include <numeric>
 #include <type_traits>
 
+namespace
+{
+    struct stateful_hash
+    {
+        static std::size_t next_seed;
+
+        std::size_t seed;
+
+        stateful_hash() : seed(next_seed++)
+        {
+        }
+
+        std::size_t operator()(int) const
+        {
+            return seed;
+        }
+    };
+
+    std::size_t stateful_hash::next_seed = 0;
+} // namespace
+
 static_assert(!std::is_copy_constructible_v< rpnx::conc_sharded_unordered_map< int, int > >);
 static_assert(!std::is_copy_assignable_v< rpnx::conc_sharded_unordered_map< int, int > >);
 static_assert(!std::is_move_constructible_v< rpnx::conc_sharded_unordered_map< int, int > >);
@@ -36,6 +57,16 @@ TEST(conc_sharded_unordered_map, put_and_get)
     EXPECT_EQ(map.get(1), "one");
     EXPECT_EQ(map.get(2), "two");
     EXPECT_EQ(map.get(3), "three");
+}
+
+TEST(conc_sharded_unordered_map, reuses_the_stored_stateful_hash)
+{
+    stateful_hash::next_seed = 0;
+    rpnx::conc_sharded_unordered_map< int, std::string, stateful_hash > map(4);
+
+    map.put(1, "one");
+
+    EXPECT_EQ(map.get(1), "one");
 }
 
 TEST(conc_sharded_unordered_map, concurrent_access)

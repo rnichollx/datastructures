@@ -214,7 +214,7 @@ namespace rpnx
             return m_vector.at(pos);
         }
 
-        /** @copydoc at(size_type) */
+        /** @brief Returns the element at an index with bounds checking. @param pos Zero-based element index. @return An immutable reference to the selected element. @throws std::out_of_range if `pos >= size()`. */
         const_reference at(size_type pos) const
         {
             return m_vector.at(pos);
@@ -231,7 +231,7 @@ namespace rpnx
             return m_vector[pos];
         }
 
-        /** @copydoc operator[](size_type) */
+        /** @brief Returns the element at an index without bounds checking. @param pos Zero-based element index. @return An immutable reference to the selected element. @pre `pos < size()`. */
         const_reference operator[](size_type pos) const
         {
             return m_vector[pos];
@@ -247,7 +247,7 @@ namespace rpnx
             return m_vector.front();
         }
 
-        /** @copydoc front() */
+        /** @brief Returns the first element. @return An immutable reference to the first element. @pre The container is not empty. */
         const_reference front() const
         {
             return m_vector.front();
@@ -263,7 +263,7 @@ namespace rpnx
             return m_vector.back();
         }
 
-        /** @copydoc back() */
+        /** @brief Returns the last element. @return An immutable reference to the last element. @pre The container is not empty. */
         const_reference back() const
         {
             return m_vector.back();
@@ -279,7 +279,7 @@ namespace rpnx
             return m_vector.data();
         }
 
-        /** @copydoc data() */
+        /** @brief Returns a pointer to the contiguous element storage. @return An immutable pointer to the first element, or an implementation-defined non-dereferenceable pointer when the container is empty. */
         T const* data() const noexcept
         {
             return m_vector.data();
@@ -550,7 +550,7 @@ namespace rpnx
             m_vector.resize(count, value);
         }
 
-        /** @brief Exchanges contents with another dynar. @param other Container to exchange with. */
+        /** @brief Exchanges contents with another dynar. @param other Container to exchange with. @pre Allocator propagation on swap is enabled, or `get_allocator() == other.get_allocator()`. */
         void swap(dynar& other) noexcept(noexcept(m_vector.swap(other.m_vector)))
         {
             m_vector.swap(other.m_vector);

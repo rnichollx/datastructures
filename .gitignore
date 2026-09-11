@@ -20,3 +20,5 @@ Testing
 .DS_Store
 *-out
 dev-workspace
+
+/tmp/

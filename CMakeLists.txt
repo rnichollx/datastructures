@@ -10,6 +10,7 @@ include(CTest)
 
 
 add_library(rpnx_datastructures INTERFACE
+        include/rpnx/geometric_array.hpp
         include/rpnx/segmented_dynar.hpp
         include/rpnx/sharded_unordered_map.hpp
         include/rpnx/iterator.hpp
@@ -59,6 +60,7 @@ install(
 if (BUILD_TESTING)
     find_package(GTest REQUIRED)
     add_executable(rpnx_datastructures_tests
+        tests/geometric_array_tests.cpp
         tests/segmented_dynar_tests.cpp
             tests/sharded_map_tests.cpp
             tests/iterator_tests.cpp
@@ -69,6 +71,7 @@ if (BUILD_TESTING)
             tests/set_tests.cpp
             tests/map_tests.cpp
             tests/dynar_tests.cpp
+            tests/uint64_base_tests.cpp
             tests/test_utils_tests.cpp
             tests/test_utils.hpp
     )
@@ -77,6 +80,8 @@ if (BUILD_TESTING)
     find_package(benchmark REQUIRED)
     add_executable(rpnx_datastructures_benchmarks
         benchmarks/function.cpp
+        benchmarks/geometric_array.cpp
+        benchmarks/geometric_array.hpp
     )
     target_link_libraries(rpnx_datastructures_benchmarks PRIVATE rpnx_datastructures benchmark::benchmark benchmark::benchmark_main)
 endif()

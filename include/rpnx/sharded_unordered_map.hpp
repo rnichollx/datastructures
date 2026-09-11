@@ -44,7 +44,7 @@ namespace rpnx
                 return m_mutex;
             }
 
-            shard(Alloc alloc) : m_map(0, Hash(), KeyEqual(), alloc)
+            shard(Hash const& hash, KeyEqual const& key_equal, Alloc const& alloc) : m_map(0, hash, key_equal, alloc)
             {
             }
 
@@ -58,6 +58,8 @@ namespace rpnx
             shard& operator=(shard&&) = delete;
         };
 
+        [[no_unique_address]] Hash m_hash;
+        [[no_unique_address]] KeyEqual m_key_equal;
         std::vector< shard, typename std::allocator_traits< Alloc >::template rebind_alloc< shard > > m_shards;
 
         template < bool IsConst >
@@ -245,8 +247,10 @@ namespace rpnx
          * @param shard_count Requested number of shards. If zero or not a power of two, it is rounded up to the next
          * power of two so shard selection can use a mask.
          * @param alloc Allocator used for the underlying unordered maps and rebound for shard storage.
+         * @param hash Hash function used both for shard selection and within each shard.
+         * @param key_equal Equality predicate used within each shard.
          */
-        explicit conc_sharded_unordered_map(std::size_t shard_count = std::thread::hardware_concurrency() * 2, Alloc const& alloc = Alloc()) : m_shards((typename std::allocator_traits< Alloc >::template rebind_alloc< shard >)(alloc))
+        explicit conc_sharded_unordered_map(std::size_t shard_count = std::thread::hardware_concurrency() * 2, Alloc const& alloc = Alloc(), Hash const& hash = Hash(), KeyEqual const& key_equal = KeyEqual()) : m_hash(hash), m_key_equal(key_equal), m_shards((typename std::allocator_traits< Alloc >::template rebind_alloc< shard >)(alloc))
         {
             if (shard_count == 0 || (shard_count & (shard_count - 1)) != 0)
             {
@@ -261,7 +265,7 @@ namespace rpnx
             m_shards.reserve(shard_count);
             for (std::size_t i = 0; i < shard_count; ++i)
             {
-                m_shards.emplace_back(alloc);
+                m_shards.emplace_back(m_hash, m_key_equal, alloc);
             }
         }
 
@@ -303,7 +307,7 @@ namespace rpnx
          */
         void put(Key const& key, Value value)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             target_shard.m_map[key] = std::move(value);
@@ -322,7 +326,7 @@ namespace rpnx
         template < typename Func >
         void put_exec(Key const& key, Func func)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             target_shard.m_map[key] = func();
@@ -340,7 +344,7 @@ namespace rpnx
         template < typename Func >
         bool try_put_exec(Key const& key, Func func)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (target_shard.m_map.find(key) != target_shard.m_map.end())
@@ -366,7 +370,7 @@ namespace rpnx
         template < typename Func >
         Value& get_or_create(Key const& key, Func func)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (auto it = target_shard.m_map.find(key); it != target_shard.m_map.end())
@@ -396,7 +400,7 @@ namespace rpnx
         template < typename Func >
         Value& get_or_init(Key const& key, Func func)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (auto it = target_shard.m_map.find(key); it != target_shard.m_map.end())
@@ -435,7 +439,7 @@ namespace rpnx
         template < typename Func >
         Value& get_or_init_iter(Key const& key, Func func)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             if (auto it = target_shard.m_map.find(key); it != target_shard.m_map.end())
@@ -468,7 +472,7 @@ namespace rpnx
          */
         bool try_put(Key const& key, Value value)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             auto [it, inserted] = target_shard.m_map.emplace(key, std::move(value));
@@ -486,7 +490,7 @@ namespace rpnx
          */
         Value get(Key const& key)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             return target_shard.m_map.at(key);
@@ -502,7 +506,7 @@ namespace rpnx
          */
         void erase(Key const& key)
         {
-            std::size_t shard_index = Hash{}(key) & (m_shards.size() - 1);
+            std::size_t shard_index = m_hash(key) & (m_shards.size() - 1);
             shard& target_shard = m_shards[shard_index];
             std::lock_guard< std::mutex > lock(target_shard.get_mutex());
             target_shard.m_map.erase(key);

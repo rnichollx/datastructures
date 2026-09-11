@@ -210,7 +210,7 @@ namespace rpnx
             return m_map.at(key);
         }
 
-        /** @copydoc at(Key const&) */
+        /** @brief Returns the mapped value for an existing key. @param key Key to locate. @return An immutable reference to the mapped value. @throws std::out_of_range if the key is absent. */
         T const& at(Key const& key) const
         {
             return m_map.at(key);
@@ -423,6 +423,7 @@ namespace rpnx
          * @brief Inserts an extracted node if its key is absent.
          * @param node Owning node handle to insert.
          * @return Insertion result containing the position, insertion state, and any uninserted node.
+         * @pre `node.empty()` or `get_allocator() == node.get_allocator()`.
          */
         insert_return_type insert(node_type&& node)
         {
@@ -434,6 +435,7 @@ namespace rpnx
          * @param hint Position immediately before which insertion may be efficient.
          * @param node Owning node handle to insert.
          * @return Iterator to the matching element.
+         * @pre `node.empty()` or `get_allocator() == node.get_allocator()`.
          */
         iterator insert(const_iterator hint, node_type&& node)
         {
@@ -591,7 +593,7 @@ namespace rpnx
             return m_map.erase(key);
         }
 
-        /** @brief Exchanges contents with another map. @param other Map to exchange with. */
+        /** @brief Exchanges contents with another map. @param other Map to exchange with. @pre Allocator propagation on swap is enabled, or `get_allocator() == other.get_allocator()`. */
         void swap(map& other) noexcept(noexcept(m_map.swap(other.m_map)))
         {
             m_map.swap(other.m_map);
@@ -609,28 +611,28 @@ namespace rpnx
             return m_map.extract(key);
         }
 
-        /** @brief Transfers non-duplicate nodes from another RPNX map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from another RPNX map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(map< Key, T, C2, Allocator >& source)
         {
             m_map.merge(source.m_map);
         }
 
-        /** @brief Transfers non-duplicate nodes from another RPNX map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from another RPNX map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(map< Key, T, C2, Allocator >&& source)
         {
             m_map.merge(source.m_map);
         }
 
-        /** @brief Transfers non-duplicate nodes from a standard map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from a standard map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(std::map< Key, T, C2, Allocator >& source)
         {
             m_map.merge(source);
         }
 
-        /** @brief Transfers non-duplicate nodes from a standard map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from a standard map. @tparam C2 Source comparator type. @param source Map from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(std::map< Key, T, C2, Allocator >&& source)
         {

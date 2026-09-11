@@ -28,8 +28,9 @@ namespace rpnx
      * @brief Owning, copyable type-erased callable with small-buffer optimization.
      *
      * Empty functions compare equal to `nullptr` and throw
-     * `std::bad_function_call` when invoked. Small nothrow-copyable callables
-     * are stored inline; other callables are heap allocated.
+     * `std::bad_function_call` when invoked. Small callables with non-throwing
+     * copy and move operations are stored inline; other callables are heap
+     * allocated.
      *
      * @tparam R Callable return type.
      * @tparam Args Callable argument types.
@@ -56,7 +57,9 @@ namespace rpnx
             callable_f const m_call;
         };
 
+        /// @brief The size of the storage allocated for SBO optimization.
         static std::size_t constexpr sbo_size = 16;
+        /// @brief The alignment of the storage allocated for SBO optimization.
         static std::size_t constexpr sbo_align = 16;
 
         callable_f m_callable;
@@ -66,7 +69,7 @@ namespace rpnx
         template < typename Functor >
         static constexpr bool use_sbo()
         {
-            return sizeof(Functor) <= sbo_size && alignof(Functor) <= sbo_align && std::is_nothrow_copy_constructible_v< Functor > && std::is_nothrow_copy_assignable_v< Functor >;
+            return sizeof(Functor) <= sbo_size && alignof(Functor) <= sbo_align && std::is_nothrow_copy_constructible_v< Functor > && std::is_nothrow_copy_assignable_v< Functor > && std::is_nothrow_move_constructible_v< Functor >;
         }
 
         /**
@@ -182,7 +185,7 @@ namespace rpnx
             if constexpr (use_sbo< Functor >())
             {
                 Functor* self_ptr = std::launder< Functor >(get_storage_address< Functor >(self));
-                const Functor* other_ptr = std::launder< Functor const >(get_storage_address< Functor >(other));
+                Functor* other_ptr = std::launder< Functor >(get_storage_address< Functor >(other));
                 new (self_ptr) Functor(std::move(*other_ptr));
                 self->m_impl_tbl = &vtbl< Functor >;
                 self->m_callable = &call_impl< Functor >;
@@ -380,10 +383,10 @@ namespace rpnx
          * @param f Callable to own.
          */
         template < typename Functor, typename = std::enable_if_t< !std::is_same_v< std::decay_t< Functor >, function > > >
-        function(Functor&& f) noexcept(use_sbo< std::decay_t< Functor > >())
+        function(Functor&& f)
         {
             using Decayed = std::decay_t< Functor >;
-            static_assert(std::is_invocable_r_v< R, Decayed, Args... >, "Functor must be invokable with the correct signature");
+            static_assert(std::is_invocable_r_v< R, Decayed&, Args... >, "Functor must be invokable with the correct signature");
 
             if constexpr (use_sbo< Decayed >())
             {

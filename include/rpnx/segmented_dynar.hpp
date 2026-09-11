@@ -238,30 +238,16 @@ namespace rpnx
             m_capacity = segment_count_total_capacity(new_segment_count);
         }
 
-        /**
-         * @brief Appends an element by value.
-         * @param value Value copied or moved into the new final element.
-         * @note Existing element references remain valid.
-         */
-        void push_back(T value)
+        /** @brief Appends a copied element. @param value Value to copy into the new final element. @note Existing element references remain valid. */
+        void push_back(T const& value)
         {
-            if (size() >= capacity())
-            {
-                reserve(capacity() + 1);
-            }
-            std::size_t insertion_index = m_size;
-            assert(capacity() > insertion_index);
-            std::size_t segment_index = index_segment(insertion_index);
-            std::size_t sub_index = index_subindex(insertion_index);
+            emplace_back(value);
+        }
 
-            using element_allocator_type = typename std::allocator_traits< Alloc >::template rebind_alloc< T >;
-            using element_alloc_traits = std::allocator_traits< element_allocator_type >;
-            element_allocator_type elem_alloc(m_alloc);
-            T*& segment = m_segments[segment_index];
-            assert(sub_index < segment_size(segment_index));
-            assert(segment != nullptr);
-            element_alloc_traits::construct(elem_alloc, &segment[sub_index], std::move(value));
-            ++m_size;
+        /** @brief Appends a moved element. @param value Value to move into the new final element. @note Existing element references remain valid. */
+        void push_back(T&& value)
+        {
+            emplace_back(std::move(value));
         }
 
         /** @brief Accesses an element without bounds checking. @param index Zero-based index. @return Mutable element reference. @pre `index < size()`. */
@@ -477,20 +463,60 @@ namespace rpnx
             other.m_segments = nullptr;
         }
 
-        /** @brief Move-assigns by taking ownership of all segments. @param other Source container, left empty. @return Reference to this container. */
-        segmented_dynar& operator=(segmented_dynar&& other) noexcept
+        /** @brief Move-assigns subject to allocator propagation rules. @param other Source container, left empty after successful assignment. @return Reference to this container. */
+        segmented_dynar& operator=(segmented_dynar&& other) noexcept(std::allocator_traits< Alloc >::propagate_on_container_move_assignment::value ? std::is_nothrow_move_assignable_v< Alloc > : std::allocator_traits< Alloc >::is_always_equal::value)
         {
             if (this != &other)
             {
-                reset();
-                m_size = other.m_size;
-                m_capacity = other.m_capacity;
-                m_segments = other.m_segments;
-                m_alloc = std::move(other.m_alloc);
+                if constexpr (std::allocator_traits< Alloc >::propagate_on_container_move_assignment::value)
+                {
+                    reset();
+                    m_alloc = std::move(other.m_alloc);
+                    m_size = other.m_size;
+                    m_capacity = other.m_capacity;
+                    m_segments = other.m_segments;
+                    other.m_size = 0;
+                    other.m_capacity = 0;
+                    other.m_segments = nullptr;
+                }
+                else if constexpr (std::allocator_traits< Alloc >::is_always_equal::value)
+                {
+                    reset();
+                    m_size = other.m_size;
+                    m_capacity = other.m_capacity;
+                    m_segments = other.m_segments;
+                    other.m_size = 0;
+                    other.m_capacity = 0;
+                    other.m_segments = nullptr;
+                }
+                else if (m_alloc == other.m_alloc)
+                {
+                    reset();
+                    m_size = other.m_size;
+                    m_capacity = other.m_capacity;
+                    m_segments = other.m_segments;
+                    other.m_size = 0;
+                    other.m_capacity = 0;
+                    other.m_segments = nullptr;
+                }
+                else
+                {
+                    segmented_dynar replacement(m_alloc);
+                    replacement.reserve(other.size());
+                    for (std::size_t i = 0; i < other.size(); ++i)
+                    {
+                        replacement.emplace_back(std::move(other[i]));
+                    }
 
-                other.m_size = 0;
-                other.m_capacity = 0;
-                other.m_segments = nullptr;
+                    reset();
+                    m_size = replacement.m_size;
+                    m_capacity = replacement.m_capacity;
+                    m_segments = replacement.m_segments;
+                    replacement.m_size = 0;
+                    replacement.m_capacity = 0;
+                    replacement.m_segments = nullptr;
+                    other.clear();
+                }
             }
             return *this;
         }
@@ -498,10 +524,18 @@ namespace rpnx
         /** @brief Copy-constructs every element. @param other Container to copy. */
         segmented_dynar(const segmented_dynar& other) : m_alloc(std::allocator_traits< Alloc >::select_on_container_copy_construction(other.m_alloc))
         {
-            reserve(other.m_size);
-            for (std::size_t i = 0; i < other.m_size; ++i)
+            try
             {
-                push_back(other[i]);
+                reserve(other.m_size);
+                for (std::size_t i = 0; i < other.m_size; ++i)
+                {
+                    push_back(other[i]);
+                }
+            }
+            catch (...)
+            {
+                reset();
+                throw;
             }
         }
 
@@ -658,23 +692,30 @@ namespace rpnx
                 if (n == 0)
                     return *this;
 
-                if (m_ptr)
+                if (m_ptr != nullptr)
                 {
-                    if (n > 0 && (m_ptr + n < m_seg_end))
+                    if (n > 0 && n < m_seg_end - m_ptr)
                     {
                         m_ptr += n;
-                        m_global_index += n;
+                        m_global_index += static_cast< std::size_t >(n);
                         return *this;
                     }
-                    else if (n < 0 && (m_ptr + n >= m_seg_begin))
+                    if (n < 0 && n >= -(m_ptr - m_seg_begin))
                     {
                         m_ptr += n;
-                        m_global_index += n;
+                        m_global_index -= static_cast< std::size_t >(-(n + 1)) + 1;
                         return *this;
                     }
                 }
 
-                m_global_index += n;
+                if (n > 0)
+                {
+                    m_global_index += static_cast< std::size_t >(n);
+                }
+                else
+                {
+                    m_global_index -= static_cast< std::size_t >(-(n + 1)) + 1;
+                }
                 load_segment_cache();
                 return *this;
             }
@@ -682,7 +723,16 @@ namespace rpnx
             /** @brief Moves backward by a signed offset. @param n Offset in elements. @return Reference to this iterator. @pre The resulting position belongs to the same container range. */
             iterator_impl& operator-=(difference_type n)
             {
-                return *this += (-n);
+                if (n > 0)
+                {
+                    m_global_index -= static_cast< std::size_t >(n);
+                }
+                else if (n < 0)
+                {
+                    m_global_index += static_cast< std::size_t >(-(n + 1)) + 1;
+                }
+                load_segment_cache();
+                return *this;
             }
 
             /** @brief Returns an iterator moved by an offset. @param n Offset in elements. @return Shifted iterator. */
@@ -691,6 +741,13 @@ namespace rpnx
                 iterator_impl temp = *this;
                 temp += n;
                 return temp;
+            }
+
+            /** @brief Returns an iterator moved by a leading offset. @param n Offset in elements. @param iterator Iterator to move. @return Shifted iterator. */
+            friend iterator_impl operator+(difference_type n, iterator_impl iterator)
+            {
+                iterator += n;
+                return iterator;
             }
 
             /** @brief Returns an iterator moved backward by an offset. @param n Offset in elements. @return Shifted iterator. */

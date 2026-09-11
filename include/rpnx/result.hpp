@@ -48,7 +48,7 @@ namespace rpnx
 
         /**
          * @brief Tests if the result contains an exception and rethrows it if present.
-         * @throws The stored exception if present.
+         * @note Rethrows the stored exception if present.
          */
         void test() const
         {
@@ -61,7 +61,7 @@ namespace rpnx
         /**
          * @brief Returns the stored value from an lvalue result.
          * @return A mutable reference to the stored value.
-         * @throws The stored exception when the result contains an error.
+         * @note Rethrows the stored exception when the result contains an error.
          * @pre The result contains a value or an error.
          */
         T & get() &
@@ -76,7 +76,7 @@ namespace rpnx
             return t.value();
         }
 
-        /** @copydoc get() & */
+        /** @brief Returns the stored value from a const lvalue result. @return An immutable reference to the stored value. @note Rethrows the stored exception when the result contains an error. @pre The result contains a value or an error. */
         T const & get() const &
         {
             if (er)
@@ -92,7 +92,7 @@ namespace rpnx
         /**
          * @brief Returns the stored value from an rvalue result.
          * @return An rvalue reference to the stored value.
-         * @throws The stored exception when the result contains an error.
+         * @note Rethrows the stored exception when the result contains an error.
          * @pre The result contains a value or an error.
          */
         T && get() &&
@@ -107,7 +107,7 @@ namespace rpnx
             return std::move(t.value());
         }
 
-        /** @copydoc get() && */
+        /** @brief Returns the stored value from a const rvalue result. @return An immutable rvalue reference to the stored value. @note Rethrows the stored exception when the result contains an error. @pre The result contains a value or an error. */
         T const && get() const &&
         {
             if (er)
@@ -249,7 +249,7 @@ namespace rpnx
 
         /**
          * @brief Tests if the result contains an exception and rethrows it if present.
-         * @throws The stored exception if present.
+         * @note Rethrows the stored exception if present.
          */
         void test() const
         {
@@ -261,7 +261,7 @@ namespace rpnx
 
         /**
          * @brief Gets the stored value (void).
-         * @throws The stored exception if present.
+         * @note Rethrows the stored exception if present.
          * @throws std::logic_error if no value is stored.
          */
         void get() const
@@ -273,7 +273,7 @@ namespace rpnx
             return;
         }
 
-        /** @brief Alias for `get()`. @throws The stored exception or `std::logic_error` when incomplete. */
+        /** @brief Alias for `get()`. @note Rethrows the stored exception if present. @throws std::logic_error when incomplete. */
         void value() const
         {
             get();

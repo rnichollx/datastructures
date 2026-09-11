@@ -2,8 +2,68 @@
 
 #include <gtest/gtest.h>
 #include "rpnx/variant.hpp"
+#include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+namespace
+{
+    struct allocation_owners
+    {
+        std::unordered_map< void*, int > owners;
+        bool mismatched_deallocation = false;
+    };
+
+    template < typename T >
+    struct owner_allocator
+    {
+        using value_type = T;
+
+        std::shared_ptr< allocation_owners > state;
+        int id = 0;
+
+        owner_allocator() : state(std::make_shared< allocation_owners >())
+        {
+        }
+
+        owner_allocator(std::shared_ptr< allocation_owners > state, int id) : state(std::move(state)), id(id)
+        {
+        }
+
+        template < typename U >
+        owner_allocator(owner_allocator< U > const& other) : state(other.state), id(other.id)
+        {
+        }
+
+        T* allocate(std::size_t count)
+        {
+            T* allocation = std::allocator< T >().allocate(count);
+            state->owners.emplace(allocation, id);
+            return allocation;
+        }
+
+        void deallocate(T* allocation, std::size_t count)
+        {
+            std::unordered_map< void*, int >::iterator owner = state->owners.find(allocation);
+            if (owner == state->owners.end() || owner->second != id)
+            {
+                state->mismatched_deallocation = true;
+            }
+            else
+            {
+                state->owners.erase(owner);
+            }
+            std::allocator< T >().deallocate(allocation, count);
+        }
+
+        template < typename U >
+        bool operator==(owner_allocator< U > const& other) const
+        {
+            return state == other.state && id == other.id;
+        }
+    };
+} // namespace
 
 TEST(variant, default_constructor)
 {
@@ -59,6 +119,25 @@ TEST(variant, assignment)
     v3 = std::move(v2);
     ASSERT_EQ(v3.index(), 1);
     ASSERT_EQ(v3.get_as<std::string>(), "world");
+}
+
+TEST(variant, assignment_keeps_payload_and_allocator_ownership_together)
+{
+    std::shared_ptr< allocation_owners > state = std::make_shared< allocation_owners >();
+    using allocator_type = owner_allocator< void >;
+    using variant_type = rpnx::basic_variant< allocator_type, int, std::string >;
+
+    {
+        variant_type destination(7, allocator_type(state, 1));
+        variant_type source(std::string("source"), allocator_type(state, 2));
+
+        destination = source;
+        EXPECT_EQ(destination.get_as< std::string >(), "source");
+        EXPECT_FALSE(state->mismatched_deallocation);
+    }
+
+    EXPECT_FALSE(state->mismatched_deallocation);
+    EXPECT_TRUE(state->owners.empty());
 }
 
 TEST(variant, accessors)

@@ -329,13 +329,13 @@ namespace rpnx
             m_set.insert(init);
         }
 
-        /** @brief Inserts an extracted node if absent. @param node Owning node handle to insert. @return Insertion result containing the position, insertion state, and any uninserted node. */
+        /** @brief Inserts an extracted node if absent. @param node Owning node handle to insert. @return Insertion result containing the position, insertion state, and any uninserted node. @pre `node.empty()` or `get_allocator() == node.get_allocator()`. */
         insert_return_type insert(node_type&& node)
         {
             return m_set.insert(std::move(node));
         }
 
-        /** @brief Inserts an extracted node using an ordering hint. @param hint Position immediately before which insertion may be efficient. @param node Owning node handle to insert. @return Iterator to the matching element. */
+        /** @brief Inserts an extracted node using an ordering hint. @param hint Position immediately before which insertion may be efficient. @param node Owning node handle to insert. @return Iterator to the matching element. @pre `node.empty()` or `get_allocator() == node.get_allocator()`. */
         iterator insert(const_iterator hint, node_type&& node)
         {
             return m_set.insert(hint, std::move(node));
@@ -373,7 +373,7 @@ namespace rpnx
             return m_set.erase(key);
         }
 
-        /** @brief Exchanges contents with another set. @param other Set to exchange with. */
+        /** @brief Exchanges contents with another set. @param other Set to exchange with. @pre Allocator propagation on swap is enabled, or `get_allocator() == other.get_allocator()`. */
         void swap(set& other) noexcept(noexcept(m_set.swap(other.m_set)))
         {
             m_set.swap(other.m_set);
@@ -391,28 +391,28 @@ namespace rpnx
             return m_set.extract(key);
         }
 
-        /** @brief Transfers non-duplicate nodes from another RPNX set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from another RPNX set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(set< Key, C2, Allocator >& source)
         {
             m_set.merge(source.m_set);
         }
 
-        /** @brief Transfers non-duplicate nodes from another RPNX set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from another RPNX set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(set< Key, C2, Allocator >&& source)
         {
             m_set.merge(source.m_set);
         }
 
-        /** @brief Transfers non-duplicate nodes from a standard set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from a standard set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(std::set< Key, C2, Allocator >& source)
         {
             m_set.merge(source);
         }
 
-        /** @brief Transfers non-duplicate nodes from a standard set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. */
+        /** @brief Transfers non-duplicate nodes from a standard set. @tparam C2 Source comparator type. @param source Set from which nodes are transferred. @pre `get_allocator() == source.get_allocator()`. */
         template < typename C2 >
         void merge(std::set< Key, C2, Allocator >&& source)
         {
