@@ -10,12 +10,17 @@
 #include <random>
 #include <rpnx/hadix_map.hpp>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 static_assert(std::forward_iterator< rpnx::hadix_map< std::uint64_t, std::uint64_t >::iterator >);
 static_assert(std::forward_iterator< rpnx::hadix_map< std::uint64_t, std::uint64_t >::const_iterator >);
 static_assert(std::forward_iterator< rpnx::hadix_map< std::uint64_t, std::uint64_t >::local_iterator >);
+
+static_assert(std::is_void_v< decltype(std::declval< rpnx::hadix_map< std::uint64_t, std::uint64_t >& >().erase(std::declval< rpnx::hadix_map< std::uint64_t, std::uint64_t >::iterator >())) >);
+static_assert(std::is_void_v< decltype(std::declval< rpnx::hadix_map< std::uint64_t, std::uint64_t >& >().erase(std::declval< rpnx::hadix_map< std::uint64_t, std::uint64_t >::const_iterator >())) >);
 
 TEST(hadix_map, common_api)
 {
@@ -622,11 +627,18 @@ TEST(hadix_map, iterator_erasure_survives_prefix_refill_and_directory_shrinking)
         traversal.push_back(entry.first);
     }
     std::size_t erased = 0;
-    for (auto it = values.begin(); it != values.end();)
+    for (auto it = values.begin(); it != values.end(); it = values.begin())
     {
         ASSERT_LT(erased, traversal.size());
         EXPECT_EQ(it->first, traversal[erased]);
-        it = values.erase(it);
+        if (erased % 2 == 0)
+        {
+            values.erase(it);
+        }
+        else
+        {
+            values.erase(std::as_const(values).begin());
+        }
         ++erased;
     }
     EXPECT_EQ(erased, traversal.size());

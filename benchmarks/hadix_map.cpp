@@ -4,9 +4,9 @@
 
 namespace rpnx_benchmarks
 {
-    BENCHMARK_TEMPLATE(hadix_sampled, rpnx::hadix_map< std::uint64_t, std::uint64_t >)->Name("hadix_map/sampled/distributed")->Args({65536, 6553})->Args({1000000, 100000})->Args({100000000, 100000})->Iterations(1)->UseManualTime();
-    BENCHMARK_TEMPLATE(hadix_sampled, std::unordered_map< std::uint64_t, std::uint64_t >)->Name("std_unordered_map/sampled/distributed")->Args({65536, 6553})->Args({1000000, 100000})->Args({100000000, 100000})->Iterations(1)->UseManualTime();
-    BENCHMARK_TEMPLATE(hadix_sampled, std::map< std::uint64_t, std::uint64_t >)->Name("std_map/sampled/distributed")->Args({65536, 6553})->Args({1000000, 100000})->Args({100000000, 100000})->Iterations(1)->UseManualTime();
+    BENCHMARK_TEMPLATE(hadix_sampled, rpnx::hadix_map< std::uint64_t, std::uint64_t >)->Name("hadix_map/sampled/distributed")->Args({65536, 6553})->Args({1000000, 100000})->Args({25000000, 100000})->Iterations(1)->UseManualTime();
+    BENCHMARK_TEMPLATE(hadix_sampled, std::unordered_map< std::uint64_t, std::uint64_t >)->Name("std_unordered_map/sampled/distributed")->Args({65536, 6553})->Args({1000000, 100000})->Args({25000000, 100000})->Iterations(1)->UseManualTime();
+    BENCHMARK_TEMPLATE(hadix_sampled, std::map< std::uint64_t, std::uint64_t >)->Name("std_map/sampled/distributed")->Args({65536, 6553})->Args({1000000, 100000})->Args({25000000, 100000})->Iterations(1)->UseManualTime();
 
     BENCHMARK_TEMPLATE(hadix_insert, rpnx::hadix_map< std::uint64_t, std::uint64_t >)->Name("hadix_map/insert/distributed")->Arg(1024)->Arg(65536)->Arg(1000000)->Arg(1048576);
     BENCHMARK_TEMPLATE(hadix_insert, std::unordered_map< std::uint64_t, std::uint64_t >)->Name("std_unordered_map/insert/distributed")->Arg(1024)->Arg(65536)->Arg(1000000)->Arg(1048576);

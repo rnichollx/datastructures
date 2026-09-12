@@ -1420,22 +1420,17 @@ namespace rpnx
             shrink_after_erase(1);
             return 1;
         }
-        /** @brief Erases an iterator and returns its previous successor after any bucket changes. */
-        iterator erase(const_iterator position)
+        /** @brief Erases the referenced entry without finding a successor; shrinking can allocate. */
+        void erase(const_iterator position)
         {
             assert(position.m_owner == this && position != cend());
-            size_type rank = position.rank();
-            erase_rank(position.m_bucket, rank);
-            iterator next = iterator_at_rank(position.m_bucket, rank);
-            value_type* retained = next.m_value;
-            hash_type hash = retained ? next.ordering_hash() : 0;
+            erase_rank(position.m_bucket, position.rank());
             shrink_after_erase(1);
-            return retained ? locate(retained->first, hash) : end();
         }
-        /** @brief Erases a mutable iterator and returns its previous successor. */
-        iterator erase(iterator position)
+        /** @brief Erases the referenced entry through a mutable iterator. */
+        void erase(iterator position)
         {
-            return erase(const_iterator(position));
+            erase(const_iterator(position));
         }
         /** @brief Erases the original iterator range, then shrinks the bucket directory. */
         iterator erase(const_iterator first, const_iterator last)

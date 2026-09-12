@@ -11,6 +11,7 @@
 #include <map>
 #include <random>
 #include <rpnx/hadix_map.hpp>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -158,118 +159,162 @@ namespace rpnx_benchmarks
     }
 
     /** @brief Selects the operation whose individual latency is sampled. */
-    enum class hadix_operation { insert, find_hit, find_miss, erase };
+    enum class hadix_operation { insert, find_hit, find_miss, erase, mixed };
 
     /**
-     * @brief Measures each of four operations for five seconds on one prepopulated map.
-     * Each batch begins with the requested number of keys. Batches advance through
-     * the key population and wrap at its end, shuffling queries outside timing.
-     * Restoration, population, key generation and destruction are excluded from the
-     * five-second budget. The final batch completes even if it exceeds the budget.
-     * Counters report mean nanoseconds, total operations and measured seconds for
-     * each phase; construction_seconds reports the initial population cost separately.
+     * @brief Measures full construction and deletion passes plus timed lookup and churn.
+     * Construction inserts N distinct keys once, and final deletion removes all N keys once.
+     * Present lookup, absent lookup and mixed erase/insert phases each run for at least
+     * five measured seconds, completing the final batch. Mixed pairs replace an existing
+     * key with a fresh key, so population alternates between N-1 and N.
+     * Key generation, shuffling and live-key bookkeeping occur outside batch timing.
+     * Means include per-operation clock and maximum tracking overhead. Mixed statistics
+     * are per individual operation, not per pair. The mixed maximum also covers construction
+     * and final deletion; mixed_phase_max_ns retains the mixed-only peak. Its mean covers
+     * only the five-second mixed phase. Observed wall-clock maxima include
+     * scheduling effects and do not establish an execution-time bound.
      */
     template < typename Map >
     void hadix_sampled(benchmark::State& state)
     {
         std::size_t count = static_cast< std::size_t >(state.range(0));
         hadix_workload workload(count, static_cast< std::size_t >(state.range(1)));
-        Map values;
-        std::chrono::steady_clock::time_point population_start = std::chrono::steady_clock::now();
-        for (std::uint64_t key : workload.insertion)
+        /** @brief Accumulates elapsed time, sample count, successful results and peak latency. */
+        struct operation_measurement
         {
-            values.try_emplace(key, key);
-        }
-        state.counters["construction_seconds"] = std::chrono::duration< double >(std::chrono::steady_clock::now() - population_start).count();
+            double seconds = 0;
+            std::size_t operations = 0;
+            std::size_t successes = 0;
+            std::chrono::steady_clock::duration maximum{};
+        };
+        auto measure_batch = []< hadix_operation Operation >(Map& current, std::vector< std::uint64_t > const& queries, operation_measurement& result)
+        {
+            std::size_t successes = 0;
+            std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
+            for (std::size_t i = 0; i < queries.size(); ++i)
+            {
+                std::uint64_t key = queries[i];
+                std::chrono::steady_clock::time_point operation_start = std::chrono::steady_clock::now();
+                if constexpr (Operation == hadix_operation::insert)
+                {
+                    std::pair< typename Map::iterator, bool > inserted = current.try_emplace(key, key);
+                    benchmark::DoNotOptimize(inserted);
+                    successes += inserted.second;
+                }
+                else if constexpr (Operation == hadix_operation::erase)
+                {
+                    successes += current.erase(key);
+                }
+                else if constexpr (Operation == hadix_operation::mixed)
+                {
+                    if (i % 2 == 0)
+                    {
+                        successes += current.erase(key);
+                    }
+                    else
+                    {
+                        std::pair< typename Map::iterator, bool > inserted = current.try_emplace(key, key);
+                        benchmark::DoNotOptimize(inserted);
+                        successes += inserted.second;
+                    }
+                }
+                else
+                {
+                    typename Map::const_iterator found = std::as_const(current).find(key);
+                    benchmark::DoNotOptimize(found);
+                    successes += found != current.end();
+                }
+                benchmark::DoNotOptimize(successes);
+                std::chrono::steady_clock::duration elapsed = std::chrono::steady_clock::now() - operation_start;
+                result.maximum = std::max(result.maximum, elapsed);
+            }
+            benchmark::DoNotOptimize(current);
+            benchmark::ClobberMemory();
+            result.seconds += std::chrono::duration< double >(std::chrono::steady_clock::now() - start).count();
+            result.operations += queries.size();
+            result.successes += successes;
+        };
         state.counters["initial_keys"] = static_cast< double >(count);
         state.counters["batch_keys"] = static_cast< double >(workload.hits.size());
         std::size_t total_operations = 0;
         for (auto iteration : state)
         {
-            auto measure = []< hadix_operation Operation >(Map& current, std::vector< std::uint64_t >& queries, std::size_t population)
+            Map values;
+            operation_measurement insertion;
+            measure_batch.template operator()< hadix_operation::insert >(values, workload.insertion, insertion);
+            auto measure_lookup = [&]< hadix_operation Operation >(std::vector< std::uint64_t >& queries)
             {
-                Map const& lookup = current;
-                double seconds = 0;
-                std::size_t operations = 0;
+                operation_measurement result;
                 std::size_t cursor = 0;
                 std::mt19937_64 random(809174);
-                while (seconds < 5.0)
+                while (result.seconds < 5.0)
                 {
-                    std::size_t key_offset = Operation == hadix_operation::insert || Operation == hadix_operation::find_miss ? population : 0;
+                    std::size_t offset = Operation == hadix_operation::find_miss ? count : 0;
                     for (std::size_t i = 0; i < queries.size(); ++i)
                     {
-                        queries[i] = hadix_benchmark_key(key_offset + (cursor + i) % population);
+                        queries[i] = hadix_benchmark_key(offset + (cursor + i) % count);
                     }
                     std::shuffle(queries.begin(), queries.end(), random);
-                    std::uint64_t sum = 0;
-                    std::chrono::steady_clock::time_point start = std::chrono::steady_clock::now();
-                    for (std::uint64_t key : queries)
-                    {
-                        if constexpr (Operation == hadix_operation::insert)
-                        {
-                            current.try_emplace(key, key);
-                        }
-                        else if constexpr (Operation == hadix_operation::erase)
-                        {
-                            sum += current.erase(key);
-                        }
-                        else
-                        {
-                            typename Map::const_iterator found = lookup.find(key);
-                            if (found != lookup.end())
-                            {
-                                sum += found->second;
-                            }
-                        }
-                    }
-                    benchmark::DoNotOptimize(sum);
-                    benchmark::DoNotOptimize(current);
-                    benchmark::ClobberMemory();
-                    seconds += std::chrono::duration< double >(std::chrono::steady_clock::now() - start).count();
-                    operations += queries.size();
-                    if constexpr (Operation == hadix_operation::insert)
-                    {
-                        for (std::uint64_t key : queries)
-                        {
-                            current.erase(key);
-                        }
-                    }
-                    else if constexpr (Operation == hadix_operation::erase)
-                    {
-                        for (std::uint64_t key : queries)
-                        {
-                            current.try_emplace(key, key);
-                        }
-                    }
-                    cursor = (cursor + queries.size()) % population;
+                    measure_batch.template operator()< Operation >(values, queries, result);
+                    cursor = (cursor + queries.size()) % count;
                 }
-                return std::pair{seconds, operations};
+                return result;
             };
-            auto [hit_seconds, hit_samples] = measure.template operator()< hadix_operation::find_hit >(values, workload.hits, count);
-            auto [miss_seconds, miss_samples] = measure.template operator()< hadix_operation::find_miss >(values, workload.misses, count);
-            auto [insert_seconds, insert_samples] = measure.template operator()< hadix_operation::insert >(values, workload.misses, count);
-            auto [erase_seconds, erase_samples] = measure.template operator()< hadix_operation::erase >(values, workload.hits, count);
-            if (values.size() != count)
+            operation_measurement hit = measure_lookup.template operator()< hadix_operation::find_hit >(workload.hits);
+            operation_measurement miss = measure_lookup.template operator()< hadix_operation::find_miss >(workload.misses);
+            operation_measurement mixed;
+            std::vector< std::uint64_t > live_keys = workload.insertion;
+            std::vector< std::uint64_t > mixed_queries(workload.hits.size() * 2);
+            std::vector< std::size_t > positions(workload.hits.size());
+            std::size_t cursor = 0;
+            std::uint64_t next_key = count;
+            std::mt19937_64 random(809175);
+            while (mixed.seconds < 5.0)
             {
-                state.SkipWithError("Map population changed after restoring measured batches");
+                for (std::size_t i = 0; i < positions.size(); ++i)
+                {
+                    positions[i] = (cursor + i) % count;
+                }
+                std::shuffle(positions.begin(), positions.end(), random);
+                for (std::size_t i = 0; i < positions.size(); ++i)
+                {
+                    mixed_queries[2 * i] = live_keys[positions[i]];
+                    mixed_queries[2 * i + 1] = hadix_benchmark_key(next_key++);
+                    live_keys[positions[i]] = mixed_queries[2 * i + 1];
+                }
+                measure_batch.template operator()< hadix_operation::mixed >(values, mixed_queries, mixed);
+                if (values.size() != count || mixed.successes != mixed.operations)
+                {
+                    state.SkipWithError("Mixed operations failed to preserve the target population");
+                    return;
+                }
+                cursor = (cursor + positions.size()) % count;
+            }
+            std::shuffle(live_keys.begin(), live_keys.end(), random);
+            operation_measurement deletion;
+            measure_batch.template operator()< hadix_operation::erase >(values, live_keys, deletion);
+            if (!values.empty() || insertion.successes != count || deletion.successes != count || hit.successes != hit.operations || miss.successes != 0)
+            {
+                state.SkipWithError("Construction, lookup or deletion returned an unexpected result");
                 return;
             }
-            state.counters["find_hit_ns"] += hit_seconds * 1e9 / hit_samples;
-            state.counters["find_miss_ns"] += miss_seconds * 1e9 / miss_samples;
-            state.counters["insert_ns"] += insert_seconds * 1e9 / insert_samples;
-            state.counters["erase_ns"] += erase_seconds * 1e9 / erase_samples;
-            state.counters["find_hit_seconds"] += hit_seconds;
-            state.counters["find_miss_seconds"] += miss_seconds;
-            state.counters["insert_seconds"] += insert_seconds;
-            state.counters["erase_seconds"] += erase_seconds;
-            state.counters["find_hit_samples"] += static_cast< double >(hit_samples);
-            state.counters["find_miss_samples"] += static_cast< double >(miss_samples);
-            state.counters["insert_samples"] += static_cast< double >(insert_samples);
-            state.counters["erase_samples"] += static_cast< double >(erase_samples);
-            total_operations += hit_samples + miss_samples + insert_samples + erase_samples;
-            state.SetIterationTime(hit_seconds + miss_seconds + insert_seconds + erase_seconds);
+            double total_seconds = 0;
+            for (std::pair< char const*, operation_measurement > phase : {std::pair{"insert", insertion}, {"find_hit", hit}, {"find_miss", miss}, {"mixed", mixed}, {"erase", deletion}})
+            {
+                std::string name = phase.first;
+                operation_measurement& result = phase.second;
+                state.counters[name + "_ns"] += result.seconds * 1e9 / result.operations;
+                state.counters[name + "_max_ns"] = std::max(static_cast< double >(state.counters[name + "_max_ns"]), std::chrono::duration< double, std::nano >(result.maximum).count());
+                state.counters[name + "_seconds"] += result.seconds;
+                state.counters[name + "_samples"] += static_cast< double >(result.operations);
+                total_operations += result.operations;
+                total_seconds += result.seconds;
+            }
+            state.counters["mixed_phase_max_ns"] = std::max(static_cast< double >(state.counters["mixed_phase_max_ns"]), std::chrono::duration< double, std::nano >(mixed.maximum).count());
+            state.counters["mixed_max_ns"] = std::max({static_cast< double >(state.counters["mixed_max_ns"]), static_cast< double >(state.counters["insert_max_ns"]), static_cast< double >(state.counters["erase_max_ns"])});
+            state.SetIterationTime(total_seconds);
         }
-        for (char const* counter : {"find_hit_ns", "find_miss_ns", "insert_ns", "erase_ns"})
+        for (char const* counter : {"find_hit_ns", "find_miss_ns", "insert_ns", "erase_ns", "mixed_ns"})
         {
             state.counters[counter] = state.counters[counter] / static_cast< double >(state.iterations());
         }
