@@ -514,9 +514,7 @@ namespace rpnx
          * Inlining avoids passing the intermediate search result through memory.
          */
         template < bool ComputeRank >
-#if __has_cpp_attribute(gnu::always_inline)
         [[gnu::always_inline]]
-#endif
         search_result search(bucket_storage const& bucket, hash_type hash, key_type const& key) const
         {
             std::uint32_t matches = 0;

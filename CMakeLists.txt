@@ -10,6 +10,7 @@ include(CTest)
 
 
 add_library(rpnx_datastructures INTERFACE
+        include/rpnx/inline_hadix_map.hpp
         include/rpnx/hadix_map.hpp
         include/rpnx/geometric_array.hpp
         include/rpnx/segmented_dynar.hpp
@@ -61,6 +62,7 @@ install(
 if (BUILD_TESTING)
     find_package(GTest REQUIRED)
     add_executable(rpnx_datastructures_tests
+        tests/inline_hadix_map_tests.cpp
         tests/hadix_map_tests.cpp
         tests/geometric_array_tests.cpp
         tests/segmented_dynar_tests.cpp
@@ -82,6 +84,7 @@ if (BUILD_TESTING)
     find_package(benchmark REQUIRED)
     add_executable(rpnx_datastructures_benchmarks
         benchmarks/function.cpp
+        benchmarks/inline_hadix_map.cpp
         benchmarks/hadix_map.cpp
         benchmarks/hadix_map.hpp
         benchmarks/geometric_array.cpp
