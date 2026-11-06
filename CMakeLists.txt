@@ -11,9 +11,14 @@ include(CTest)
 
 
 add_library(rpnx_datastructures INTERFACE
+        include/rpnx/cow.hpp
+        include/rpnx/shared_ptr.hpp
         include/rpnx/detail/mutex_address_wait.hpp
         include/rpnx/detail/windows_synchronization.hpp
         include/rpnx/thin_mutex.hpp
+        include/rpnx/thin_shared_mutex.hpp
+        include/rpnx/concurrent_hash_trie.hpp
+        include/rpnx/insert_only_concurrent_hash_trie.hpp
         include/rpnx/fast_mutex.hpp
         include/rpnx/inline_hadix_map.hpp
         include/rpnx/hadix_map.hpp
@@ -71,7 +76,11 @@ install(
 if (BUILD_TESTING)
     find_package(GTest REQUIRED)
     add_executable(rpnx_datastructures_tests
+        tests/cow_tests.cpp
         tests/mutex_tests.cpp
+        tests/shared_mutex_tests.cpp
+        tests/concurrent_hash_trie_tests.cpp
+        tests/insert_only_concurrent_hash_trie_tests.cpp
         tests/inline_hadix_map_tests.cpp
         tests/hadix_map_tests.cpp
         tests/geometric_array_tests.cpp
@@ -93,6 +102,8 @@ if (BUILD_TESTING)
     gtest_discover_tests(rpnx_datastructures_tests)
     find_package(benchmark REQUIRED)
     add_executable(rpnx_datastructures_benchmarks
+        benchmarks/concurrent_maps.cpp
+        benchmarks/concurrent_maps.hpp
         benchmarks/function.cpp
         benchmarks/inline_hadix_map.cpp
         benchmarks/hadix_map.cpp

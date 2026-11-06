@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <rpnx/fast_mutex.hpp>
 #include <rpnx/thin_mutex.hpp>
+#include <rpnx/thin_shared_mutex.hpp>
 
 #include <array>
 #include <atomic>
@@ -22,7 +23,7 @@ class mutex_tests : public testing::Test
 {
 };
 
-using mutex_types = testing::Types< rpnx::thin_mutex, rpnx::fast_mutex >;
+using mutex_types = testing::Types< rpnx::thin_mutex, rpnx::fast_mutex, rpnx::thin_shared_mutex >;
 TYPED_TEST_SUITE(mutex_tests, mutex_types);
 
 TYPED_TEST(mutex_tests, ownership_and_try_lock)
